@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/itc-archive-pro/static/css/main.343299f8.css",
+    "main.js": "/itc-archive-pro/static/js/main.e9d235ab.js",
+    "index.html": "/itc-archive-pro/index.html",
+    "main.343299f8.css.map": "/itc-archive-pro/static/css/main.343299f8.css.map",
+    "main.e9d235ab.js.map": "/itc-archive-pro/static/js/main.e9d235ab.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.343299f8.css",
+    "static/js/main.e9d235ab.js"
+  ]
+}
