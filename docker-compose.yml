@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  backend:
+    image: node:20
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    command: sh -c "echo Backend ready"
+
+  frontend:
+    image: node:20
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "echo Frontend ready"

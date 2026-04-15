@@ -1,0 +1,234 @@
+// frontend/src/pages/Login.jsx
+import { Eye, EyeOff, Lock, Mail, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+const Login = () => {
+  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const navigate = useNavigate();
+  const LOCAL_STORAGE_ACCOUNTS_KEY = "itc_accounts";
+
+  const defaultAccounts = [
+    {
+      id: 1,
+      name: "Admin ITC",
+      email: "admin@itc.ci",
+      role: "Administrateur",
+      department: "Administration",
+    },
+    {
+      id: 2,
+      name: "Superviseur ITC",
+      email: "superviseur@itc.ci",
+      role: "Superviseur",
+      department: "Supervision",
+    },
+    {
+      id: 3,
+      name: "Archive ITC",
+      email: "archives@itc.ci",
+      role: "Archiviste",
+      department: "Archives",
+    },
+  ];
+
+  const inferRoleFromEmail = (value) => {
+    const normalizedEmail = value.trim().toLowerCase();
+
+    if (normalizedEmail.includes("super")) return "Superviseur";
+    if (normalizedEmail.includes("admin")) return "Administrateur";
+    if (normalizedEmail.includes("archive")) return "Archiviste";
+    if (normalizedEmail.includes("consult")) return "Consultation";
+
+    return "Archiviste";
+  };
+
+  const getFallbackAccounts = () => {
+    try {
+      const storedAccounts = JSON.parse(
+        localStorage.getItem(LOCAL_STORAGE_ACCOUNTS_KEY) || "null",
+      );
+
+      if (Array.isArray(storedAccounts) && storedAccounts.length > 0) {
+        return storedAccounts;
+      }
+    } catch (error) {
+      console.error("Impossible de lire les comptes locaux", error);
+    }
+
+    localStorage.setItem(
+      LOCAL_STORAGE_ACCOUNTS_KEY,
+      JSON.stringify(defaultAccounts),
+    );
+    return defaultAccounts;
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError("");
+
+    try {
+      let users = [];
+
+      try {
+        const response = await fetch("/api/users");
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message || "API indisponible");
+        }
+
+        users = result.data || [];
+      } catch (error) {
+        users = getFallbackAccounts();
+      }
+
+      const matchedUser = users.find(
+        (user) => user.email?.toLowerCase() === email.trim().toLowerCase(),
+      );
+
+      const fakeToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+      const resolvedRole = matchedUser?.role || inferRoleFromEmail(email);
+      const resolvedDepartment =
+        matchedUser?.department || "Département Technique";
+
+      localStorage.setItem("itc_token", fakeToken);
+      localStorage.setItem("user_role", resolvedRole);
+      localStorage.setItem("user_name", matchedUser?.name || email.trim());
+      localStorage.setItem("user_department", resolvedDepartment);
+
+      navigate("/dashboard");
+    } catch (error) {
+      setLoginError("Connexion impossible pour le moment.");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-white flex">
+      {/* Côté Gauche : Formulaire */}
+      <div className="flex-1 flex flex-col justify-center px-8 md:px-24 lg:px-32">
+        <div className="mb-10">
+          <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold mb-4 shadow-lg shadow-blue-200">
+            ITC
+          </div>
+          <h2 className="text-3xl font-black text-slate-900">Bienvenue</h2>
+          <p className="text-slate-500 mt-2 font-medium">
+            Connectez-vous pour accéder aux archives d'Ivoire Techno Com.
+          </p>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">
+              Email Professionnel
+            </label>
+            <div className="relative group">
+              <Mail
+                className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-600 transition-colors"
+                size={20}
+              />
+              <input
+                type="email"
+                required
+                placeholder="nom.prenom@ivoiretechno.com"
+                className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between mb-2">
+              <label className="text-sm font-bold text-slate-700 uppercase tracking-wide">
+                Mot de passe
+              </label>
+              <a
+                href="#"
+                className="text-sm font-bold text-blue-600 hover:text-blue-800"
+              >
+                Oublié ?
+              </a>
+            </div>
+            <div className="relative group">
+              <Lock
+                className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-600 transition-colors"
+                size={20}
+              />
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                placeholder="••••••••"
+                className="w-full pl-12 pr-12 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+          </div>
+
+          {loginError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              {loginError}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-blue-600 transform transition-all active:scale-[0.98] shadow-xl shadow-slate-200"
+          >
+            Se connecter au portail
+          </button>
+        </form>
+
+        <footer className="mt-12 text-center text-slate-400 text-xs font-medium">
+          &copy; 2026 Ivoire Techno Com. Système d'archivage sécurisé.
+        </footer>
+      </div>
+
+      {/* Côté Droit : Visuel (Masqué sur mobile) */}
+      <div className="hidden lg:flex flex-1 bg-slate-900 relative overflow-hidden items-center justify-center p-12">
+        {/* Cercles décoratifs */}
+        <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-blue-600 rounded-full blur-[120px] opacity-20"></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-indigo-600 rounded-full blur-[120px] opacity-20"></div>
+
+        <div className="relative z-10 text-center max-w-md">
+          <div className="inline-flex p-4 bg-white/5 backdrop-blur-lg border border-white/10 rounded-3xl mb-8">
+            <ShieldCheck size={64} className="text-blue-400" />
+          </div>
+          <h3 className="text-4xl font-black text-white mb-4 leading-tight">
+            Sécurité de niveau entreprise.
+          </h3>
+          <p className="text-slate-400 text-lg">
+            Vos données sont chiffrées et protégées par les protocoles de
+            sécurité les plus stricts de l'industrie.
+          </p>
+
+          <div className="mt-12 grid grid-cols-2 gap-4 text-left">
+            <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
+              <p className="text-blue-400 font-bold text-xl">100%</p>
+              <p className="text-slate-500 text-xs font-bold uppercase">
+                Traçabilité
+              </p>
+            </div>
+            <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
+              <p className="text-blue-400 font-bold text-xl">AES-256</p>
+              <p className="text-slate-500 text-xs font-bold uppercase">
+                Chiffrement
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Login;

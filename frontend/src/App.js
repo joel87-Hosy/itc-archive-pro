@@ -1,0 +1,41 @@
+// frontend/src/App.js
+import {
+  Navigate,
+  Route,
+  HashRouter as Router,
+  Routes,
+} from "react-router-dom";
+import Dashboard from "./pages/Dashboard";
+import Login from "./pages/Login";
+
+// Composant pour protéger les routes
+const PrivateRoute = ({ children }) => {
+  const isAuthenticated = localStorage.getItem("itc_token"); // Vérifie si le token existe
+  return isAuthenticated ? children : <Navigate to="/login" />;
+};
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        {/* Route publique */}
+        <Route path="/login" element={<Login />} />
+
+        {/* Route protégée par PrivateRoute */}
+        <Route
+          path="/dashboard"
+          element={
+            <PrivateRoute>
+              <Dashboard />
+            </PrivateRoute>
+          }
+        />
+
+        {/* Redirection par défaut vers le login */}
+        <Route path="*" element={<Navigate to="/login" />} />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
