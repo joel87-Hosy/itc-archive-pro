@@ -127,6 +127,7 @@ const Dashboard = () => {
   const LOCAL_STORAGE_ACCOUNTS_KEY = "itc_accounts";
   const LOCAL_STORAGE_ARCHIVES_KEY = "itc_archives";
   const logoSrc = `${process.env.PUBLIC_URL}/itc-logo.jpg`;
+  const coverImageUrl = `${process.env.PUBLIC_URL}/image-couverture.png`;
 
   const defaultAccounts = [
     {
@@ -954,7 +955,10 @@ const Dashboard = () => {
   ].filter((item) => item.visible);
 
   return (
-    <div className="dashboard-shell modern-dashboard min-h-screen bg-gray-50 font-sans text-slate-900">
+    <div
+      className="dashboard-shell modern-dashboard min-h-screen bg-gray-50 font-sans text-slate-900"
+      style={{ "--archive-illustration-art": `url(${coverImageUrl})` }}
+    >
       <header ref={headerRef} className="website-header">
         <div className="website-nav-bar">
           <div className="website-nav-top">
@@ -1811,3 +1815,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

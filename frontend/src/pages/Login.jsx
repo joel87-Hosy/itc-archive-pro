@@ -12,6 +12,7 @@ const Login = () => {
   const navigate = useNavigate();
   const LOCAL_STORAGE_ACCOUNTS_KEY = "itc_accounts";
   const logoSrc = `${process.env.PUBLIC_URL}/itc-logo.jpg`;
+  const coverImageUrl = `${process.env.PUBLIC_URL}/image-couverture.png`;
 
   const defaultAccounts = [
     {
@@ -186,7 +187,10 @@ const Login = () => {
   };
 
   return (
-    <div className="login-shell min-h-screen bg-white flex">
+    <div
+      className="login-shell min-h-screen bg-white flex"
+      style={{ "--archive-illustration-art": `url(${coverImageUrl})` }}
+    >
       {/* Côté Gauche : Formulaire */}
       <div className="login-form-panel flex-1 flex flex-col justify-center px-8 md:px-24 lg:px-32">
         <div className="mb-10 login-intro-block">
