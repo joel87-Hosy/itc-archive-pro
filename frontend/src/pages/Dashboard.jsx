@@ -124,69 +124,9 @@ const Dashboard = () => {
   const canAccessAdministration = isAdmin || isSuperviseur || isArchiviste;
   const canAddUsers = isAdmin;
   const canManageAccounts = isAdmin || isSuperviseur;
-  const LOCAL_STORAGE_ACCOUNTS_KEY = "itc_accounts";
   const LOCAL_STORAGE_ARCHIVES_KEY = "itc_archives";
   const logoSrc = `${process.env.PUBLIC_URL}/itc-logo.jpg`;
   const coverImageUrl = `${process.env.PUBLIC_URL}/image-couverture.png`;
-
-  const defaultAccounts = [
-    {
-      id: 1,
-      name: "Admin ITC",
-      email: "admin@itc.ci",
-      role: "Administrateur",
-      department: "Administration",
-    },
-    {
-      id: 2,
-      name: "Superviseur ITC",
-      email: "superviseur@itc.ci",
-      role: "Superviseur",
-      department: "Supervision",
-    },
-    {
-      id: 3,
-      name: "Archive ITC",
-      email: "archives@itc.ci",
-      role: "Archiviste",
-      department: "Archives",
-    },
-    {
-      id: 4,
-      name: "Consult ITC",
-      email: "consultation@itc.ci",
-      role: "Consultation",
-      department: "Consultation",
-    },
-  ];
-
-  const getLocalAccounts = () => {
-    try {
-      const storedAccounts = JSON.parse(
-        localStorage.getItem(LOCAL_STORAGE_ACCOUNTS_KEY) || "null",
-      );
-
-      if (Array.isArray(storedAccounts) && storedAccounts.length > 0) {
-        return storedAccounts;
-      }
-    } catch (error) {
-      console.error("Impossible de lire les comptes locaux", error);
-    }
-
-    localStorage.setItem(
-      LOCAL_STORAGE_ACCOUNTS_KEY,
-      JSON.stringify(defaultAccounts),
-    );
-    return defaultAccounts;
-  };
-
-  const saveLocalAccounts = (nextAccounts) => {
-    setAccounts(nextAccounts);
-    localStorage.setItem(
-      LOCAL_STORAGE_ACCOUNTS_KEY,
-      JSON.stringify(nextAccounts),
-    );
-  };
 
   const loadAccounts = async () => {
     setIsAccountsLoading(true);
@@ -201,13 +141,18 @@ const Dashboard = () => {
 
       setAccounts(result.data || []);
     } catch (error) {
-      setAccounts(getLocalAccounts());
+      setAccounts([]);
+      setAccountMessage(
+        error.message ||
+          "Le service des comptes est indisponible. Les accès ne sont plus stockés dans le navigateur.",
+      );
     } finally {
       setIsAccountsLoading(false);
     }
   };
 
   useEffect(() => {
+    localStorage.removeItem("itc_accounts");
     loadAccounts();
     setDocumentsData(getLocalArchives());
   }, []);
@@ -304,6 +249,7 @@ const Dashboard = () => {
     localStorage.removeItem("user_role");
     localStorage.removeItem("user_name");
     localStorage.removeItem("user_department");
+    localStorage.removeItem("itc_accounts");
     navigate("/login");
   };
 
@@ -380,32 +326,10 @@ const Dashboard = () => {
       resetAccountForm();
       await loadAccounts();
     } catch (error) {
-      const localAccounts = getLocalAccounts();
-      const normalizedEmail = accountForm.email.trim().toLowerCase();
-
-      if (
-        localAccounts.some(
-          (account) => account.email?.toLowerCase() === normalizedEmail,
-        )
-      ) {
-        setAccountMessage("Un compte avec cet email existe déjà.");
-        return;
-      }
-
-      const nextAccounts = [
-        ...localAccounts,
-        {
-          id: Date.now(),
-          name: accountForm.name.trim(),
-          email: normalizedEmail,
-          role: accountForm.role,
-          department: "Département Technique",
-        },
-      ];
-
-      saveLocalAccounts(nextAccounts);
-      setAccountMessage("Le nouveau compte a été créé avec succès.");
-      resetAccountForm();
+      setAccountMessage(
+        error.message ||
+          "Création du compte impossible. Vérifiez la connexion au backend.",
+      );
     }
   };
 
@@ -453,20 +377,10 @@ const Dashboard = () => {
       resetAccountForm();
       await loadAccounts();
     } catch (error) {
-      const nextAccounts = getLocalAccounts().map((account) =>
-        account.id === Number(selectedAccountId)
-          ? {
-              ...account,
-              name: accountForm.name.trim(),
-              email: accountForm.email.trim().toLowerCase(),
-              role: accountForm.role,
-            }
-          : account,
+      setAccountMessage(
+        error.message ||
+          "Mise à jour du compte impossible. Vérifiez la connexion au backend.",
       );
-
-      saveLocalAccounts(nextAccounts);
-      setAccountMessage("Le compte sélectionné a été modifié avec succès.");
-      resetAccountForm();
     }
   };
 
@@ -501,13 +415,10 @@ const Dashboard = () => {
       resetAccountForm();
       await loadAccounts();
     } catch (error) {
-      const nextAccounts = getLocalAccounts().filter(
-        (account) => account.id !== Number(targetAccountId),
+      setAccountMessage(
+        error.message ||
+          "Suppression du compte impossible. Vérifiez la connexion au backend.",
       );
-
-      saveLocalAccounts(nextAccounts);
-      setAccountMessage("Le compte sélectionné a été supprimé avec succès.");
-      resetAccountForm();
     }
   };
 
@@ -922,13 +833,11 @@ const Dashboard = () => {
     },
     {
       label: "Comptes configurés",
-      value: Math.min(
-        100,
-        Math.round(
-          (accounts.length / Math.max(defaultAccounts.length, 1)) * 100,
-        ),
-      ),
-      detail: `${accounts.length} comptes`,
+      value: accounts.length > 0 ? 100 : 0,
+      detail:
+        accounts.length > 0
+          ? `${accounts.length} comptes synchronisés`
+          : "Aucun compte synchronisé",
       barClass: "bg-emerald-500",
     },
   ];
@@ -1815,4 +1724,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-

@@ -10,67 +10,16 @@ const Login = () => {
   const [loginError, setLoginError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const LOCAL_STORAGE_ACCOUNTS_KEY = "itc_accounts";
   const logoSrc = `${process.env.PUBLIC_URL}/itc-logo.jpg`;
   const coverImageUrl = `${process.env.PUBLIC_URL}/image-couverture.png`;
 
-  const defaultAccounts = [
-    {
-      id: 1,
-      name: "Admin ITC",
-      email: "admin@itc.ci",
-      password: "admin123",
-      role: "Administrateur",
-      department: "Administration",
-    },
-    {
-      id: 2,
-      name: "Superviseur ITC",
-      email: "superviseur@itc.ci",
-      password: "super123",
-      role: "Superviseur",
-      department: "Supervision",
-    },
-    {
-      id: 3,
-      name: "Archive ITC",
-      email: "archives@itc.ci",
-      password: "archive123",
-      role: "Archiviste",
-      department: "Archives",
-    },
-  ];
-
   useEffect(() => {
+    localStorage.removeItem("itc_accounts");
     const lastEmail = localStorage.getItem("itc_last_email") || "";
     if (lastEmail) {
       setEmail(lastEmail);
     }
   }, []);
-
-  const resolveDefaultPassword = (user = {}) => {
-    if (user.password) return user.password;
-
-    const normalizedRole = (user.role || "").toLowerCase();
-    const normalizedEmail = (user.email || "").toLowerCase();
-
-    if (normalizedRole.includes("admin") || normalizedEmail.includes("admin")) {
-      return "admin123";
-    }
-
-    if (normalizedRole.includes("super") || normalizedEmail.includes("super")) {
-      return "super123";
-    }
-
-    if (
-      normalizedRole.includes("consult") ||
-      normalizedEmail.includes("consult")
-    ) {
-      return "consult123";
-    }
-
-    return "archive123";
-  };
 
   const persistSession = ({ token, user }) => {
     localStorage.setItem("itc_token", token);
@@ -84,37 +33,6 @@ const Login = () => {
       "itc_last_email",
       (user.email || email.trim()).toLowerCase(),
     );
-  };
-
-  const inferRoleFromEmail = (value) => {
-    const normalizedEmail = value.trim().toLowerCase();
-
-    if (normalizedEmail.includes("super")) return "Superviseur";
-    if (normalizedEmail.includes("admin")) return "Administrateur";
-    if (normalizedEmail.includes("archive")) return "Archiviste";
-    if (normalizedEmail.includes("consult")) return "Consultation";
-
-    return "Archiviste";
-  };
-
-  const getFallbackAccounts = () => {
-    try {
-      const storedAccounts = JSON.parse(
-        localStorage.getItem(LOCAL_STORAGE_ACCOUNTS_KEY) || "null",
-      );
-
-      if (Array.isArray(storedAccounts) && storedAccounts.length > 0) {
-        return storedAccounts;
-      }
-    } catch (error) {
-      console.error("Impossible de lire les comptes locaux", error);
-    }
-
-    localStorage.setItem(
-      LOCAL_STORAGE_ACCOUNTS_KEY,
-      JSON.stringify(defaultAccounts),
-    );
-    return defaultAccounts;
   };
 
   const handleLogin = async (e) => {
@@ -131,56 +49,34 @@ const Login = () => {
         );
       }
 
-      try {
-        const response = await fetch("/api/users/login", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ email: normalizedEmail, password }),
-        });
+      const response = await fetch("/api/users/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: normalizedEmail, password }),
+      });
 
-        const result = await response.json();
+      const result = await response.json();
 
-        if (!response.ok) {
-          throw new Error(result.message || "Connexion impossible.");
-        }
-
-        persistSession({
-          token: result.token || `session-${Date.now()}`,
-          user: {
-            ...result.user,
-            email: normalizedEmail,
-          },
-        });
-
-        navigate("/dashboard");
-        return;
-      } catch (apiError) {
-        const users = getFallbackAccounts();
-        const matchedUser = users.find(
-          (user) => user.email?.toLowerCase() === normalizedEmail,
-        );
-
-        const expectedPassword = resolveDefaultPassword(matchedUser);
-
-        if (!matchedUser || password !== expectedPassword) {
-          throw new Error("Email ou mot de passe incorrect.");
-        }
-
-        persistSession({
-          token: `local-session-${Date.now()}`,
-          user: {
-            ...matchedUser,
-            role: matchedUser.role || inferRoleFromEmail(normalizedEmail),
-            department: matchedUser.department || "Département Technique",
-          },
-        });
-
-        navigate("/dashboard");
+      if (!response.ok) {
+        throw new Error(result.message || "Email ou mot de passe incorrect.");
       }
+
+      persistSession({
+        token: result.token || `session-${Date.now()}`,
+        user: {
+          ...result.user,
+          email: normalizedEmail,
+        },
+      });
+
+      navigate("/dashboard");
     } catch (error) {
-      setLoginError(error.message || "Connexion impossible pour le moment.");
+      setLoginError(
+        error.message ||
+          "Connexion impossible pour le moment. Vérifiez le service utilisateur.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -215,8 +111,8 @@ const Login = () => {
             Bienvenue sur Archive Pro
           </h2>
           <p className="text-slate-500 mt-2 font-medium">
-            Une interface plus moderne, plus fluide et plus proche des standards
-            des grands sites web.
+            Une interface plus moderne avec des comptes désormais gérés côté
+            serveur pour plus de sécurité.
           </p>
         </div>
 

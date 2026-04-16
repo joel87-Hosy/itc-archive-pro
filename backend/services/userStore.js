@@ -1,38 +1,43 @@
+const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
 const sequelize = require("../config/db");
 const User = require("../models/User");
 
 const DATA_FILE = path.join(__dirname, "..", "data", "users.json");
-
-const DEFAULT_USERS = [
-  {
-    id: 1,
-    name: "Admin ITC",
-    email: "admin@itc.ci",
-    password: "admin123",
-    role: "Administrateur",
-    department: "Système",
-  },
-  {
-    id: 2,
-    name: "Archive ITC",
-    email: "archives@itc.ci",
-    password: "archive123",
-    role: "Archiviste",
-    department: "Archives",
-  },
-  {
-    id: 3,
-    name: "Consult ITC",
-    email: "consultation@itc.ci",
-    password: "consult123",
-    role: "Consultation",
-    department: "Consultation",
-  },
-];
+const DEFAULT_USERS = [];
 
 let storageMode = "file";
+
+const isHashedPassword = (value = "") =>
+  typeof value === "string" && value.startsWith("scrypt$");
+
+const hashPassword = (plainPassword = "changeme123") => {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const derivedKey = crypto.scryptSync(plainPassword, salt, 64).toString("hex");
+  return `scrypt$${salt}$${derivedKey}`;
+};
+
+const verifyPassword = (plainPassword = "", storedPassword = "") => {
+  if (!plainPassword || !storedPassword) {
+    return false;
+  }
+
+  if (!isHashedPassword(storedPassword)) {
+    return plainPassword === storedPassword;
+  }
+
+  const [, salt, expectedHash] = storedPassword.split("$");
+  const derivedKey = crypto.scryptSync(plainPassword, salt, 64).toString("hex");
+
+  return crypto.timingSafeEqual(
+    Buffer.from(expectedHash, "hex"),
+    Buffer.from(derivedKey, "hex"),
+  );
+};
+
+const normalizePassword = (value) =>
+  isHashedPassword(value) ? value : hashPassword(value || "changeme123");
 
 const sanitizeUser = (user) => {
   const plainUser = typeof user?.toJSON === "function" ? user.toJSON() : user;
@@ -64,7 +69,21 @@ async function readUsersFromFile() {
   await ensureDataFile();
   const content = await fs.readFile(DATA_FILE, "utf8");
   const users = JSON.parse(content || "[]");
-  return Array.isArray(users) ? users : [];
+  const safeUsers = Array.isArray(users) ? users : [];
+  const normalizedUsers = safeUsers.map((user) => ({
+    ...user,
+    password: normalizePassword(user.password),
+  }));
+
+  const shouldPersistNormalizedUsers = normalizedUsers.some(
+    (user, index) => user.password !== safeUsers[index]?.password,
+  );
+
+  if (shouldPersistNormalizedUsers) {
+    await writeUsersToFile(normalizedUsers);
+  }
+
+  return normalizedUsers;
 }
 
 async function writeUsersToFile(users) {
@@ -79,8 +98,15 @@ async function initUserStore() {
     storageMode = "database";
 
     const userCount = await User.count();
-    if (userCount === 0) {
+    if (userCount === 0 && DEFAULT_USERS.length > 0) {
       await User.bulkCreate(DEFAULT_USERS.map(({ id, ...user }) => user));
+    }
+
+    const users = await User.findAll();
+    for (const user of users) {
+      if (!isHashedPassword(user.password || "")) {
+        await user.update({ password: normalizePassword(user.password) });
+      }
     }
 
     console.log("Gestion des comptes reliée à la base de données.");
@@ -108,12 +134,14 @@ async function listUsers() {
 async function createUser(payload) {
   const name = payload.name?.trim();
   const email = payload.email?.trim().toLowerCase();
-  const password = payload.password?.trim() || "changeme123";
+  const password = payload.password?.trim();
   const role = payload.role?.trim();
   const department = payload.department?.trim() || null;
 
-  if (!name || !email || !role) {
-    throw buildError("Veuillez renseigner le nom, l'email et le rôle.");
+  if (!name || !email || !password || !role) {
+    throw buildError(
+      "Veuillez renseigner le nom, l'email, le mot de passe et le rôle.",
+    );
   }
 
   if (storageMode === "database") {
@@ -122,7 +150,13 @@ async function createUser(payload) {
       throw buildError("Un compte avec cet email existe déjà.", 409);
     }
 
-    const user = await User.create({ name, email, password, role, department });
+    const user = await User.create({
+      name,
+      email,
+      password: hashPassword(password),
+      role,
+      department,
+    });
     return sanitizeUser(user);
   }
 
@@ -135,7 +169,7 @@ async function createUser(payload) {
     id: Date.now(),
     name,
     email,
-    password,
+    password: hashPassword(password),
     role,
     department,
   };
@@ -173,7 +207,7 @@ async function updateUser(id, payload) {
       email,
       role,
       department,
-      ...(password ? { password } : {}),
+      ...(password ? { password: hashPassword(password) } : {}),
     });
 
     return sanitizeUser(user);
@@ -200,7 +234,7 @@ async function updateUser(id, payload) {
     email,
     role,
     department,
-    ...(password ? { password } : {}),
+    ...(password ? { password: hashPassword(password) } : {}),
   };
 
   await writeUsersToFile(users);
@@ -218,8 +252,12 @@ async function authenticateUser(email, password) {
   if (storageMode === "database") {
     const user = await User.findOne({ where: { email: normalizedEmail } });
 
-    if (!user || user.password !== normalizedPassword) {
+    if (!user || !verifyPassword(normalizedPassword, user.password || "")) {
       throw buildError("Email ou mot de passe incorrect.", 401);
+    }
+
+    if (!isHashedPassword(user.password || "")) {
+      await user.update({ password: hashPassword(normalizedPassword) });
     }
 
     return sanitizeUser(user);
@@ -230,7 +268,7 @@ async function authenticateUser(email, password) {
     (item) => item.email?.toLowerCase() === normalizedEmail,
   );
 
-  if (!user || (user.password || "changeme123") !== normalizedPassword) {
+  if (!user || !verifyPassword(normalizedPassword, user.password || "")) {
     throw buildError("Email ou mot de passe incorrect.", 401);
   }
 

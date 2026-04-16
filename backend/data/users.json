@@ -3,7 +3,7 @@
     "id": 1,
     "name": "Admin ITC",
     "email": "admin@itc.ci",
-    "password": "admin123",
+    "password": "scrypt$f974b6231d4e04e872eb40aaf740255f$77611bb3aa01335cf782a37197c427d606de2d0c0ab7bef6270ed0cfcc74cb3486ea9eb2b55727d11a4693b1ad15c714270d476e5ef2dc32698f89243d6cab94",
     "role": "Administrateur",
     "department": "Système"
   },
@@ -11,7 +11,7 @@
     "id": 1776254236513,
     "name": "koffi herve",
     "email": "archiviste@itc.ci",
-    "password": "archive123",
+    "password": "scrypt$f7b0ae295a5d57dbc0a0225bb799ea39$a01d13c81a75cdc83f5e64af1951a8ef65f25aeae7b22cfe44a763cdc769d90475b6fce77a1fcbf636228def1494d4495c0b6dacdf6fcc36e4ec9feabe4a0d9f",
     "role": "Archiviste",
     "department": null
   }
