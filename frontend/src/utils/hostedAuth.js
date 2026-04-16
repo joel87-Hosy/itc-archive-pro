@@ -1,15 +1,37 @@
 const SECURE_ACCOUNTS_KEY = "itc_accounts_secure_store";
 const APP_AUTH_SALT = "itc-archive-pro";
 
-const HOSTED_ADMIN_ACCOUNT = {
-  id: 1,
-  name: "Admin ITC",
-  email: "admin@itc.ci",
-  passwordHash:
-    "680b602c47d8346de27de5302f59daaebc982150884ee3236011dc0ae66ce021",
-  role: "Administrateur",
-  department: "Système",
-};
+const DEFAULT_HOSTED_ACCOUNTS = [
+  {
+    id: 1,
+    name: "Admin ITC",
+    email: "admin@itc.ci",
+    passwordHash:
+      "680b602c47d8346de27de5302f59daaebc982150884ee3236011dc0ae66ce021",
+    role: "Administrateur",
+    department: "Système",
+  },
+  {
+    id: 2,
+    name: "koffi herve",
+    email: "archiviste@itc.ci",
+    passwordHash:
+      "b8f20efda10a33c43c5ff60c26c3992cb0f685066e65699ba2dcb23eb34b91b0",
+    role: "Archiviste",
+    department: "Département Technique",
+  },
+  {
+    id: 4,
+    name: "superviseur",
+    email: "superviseur@itc.ci",
+    passwordHash:
+      "e7cbb319b3093772cf4ae6081fabc4e734701a6183297b58b3ecdda4780c74a7",
+    role: "Superviseur",
+    department: "Département Technique",
+  },
+];
+
+const HOSTED_ADMIN_ACCOUNT = DEFAULT_HOSTED_ACCOUNTS[0];
 
 const stripSecret = (account = {}) => {
   const { passwordHash, ...safeAccount } = account;
@@ -51,26 +73,39 @@ const writeStoredAccounts = (accounts = []) => {
 
 const normalizeStoredAccounts = async (accounts = []) => {
   const safeAccounts = Array.isArray(accounts) ? accounts : [];
-  const hasAdminAccount = safeAccounts.some(
-    (account) => account.email?.toLowerCase() === HOSTED_ADMIN_ACCOUNT.email,
+  const accountsByEmail = new Map(
+    safeAccounts
+      .filter((account) => account?.email)
+      .map((account) => [account.email.toLowerCase(), account]),
   );
 
-  const sourceAccounts = hasAdminAccount
-    ? safeAccounts
-    : [HOSTED_ADMIN_ACCOUNT, ...safeAccounts];
+  let shouldPersist = false;
 
-  let shouldPersist = !hasAdminAccount;
+  for (const defaultAccount of DEFAULT_HOSTED_ACCOUNTS) {
+    const normalizedEmail = defaultAccount.email.toLowerCase();
+
+    if (!accountsByEmail.has(normalizedEmail)) {
+      accountsByEmail.set(normalizedEmail, defaultAccount);
+      shouldPersist = true;
+    }
+  }
+
   const normalizedAccounts = [];
 
-  for (const account of sourceAccounts) {
+  for (const account of accountsByEmail.values()) {
     if (!account?.email) {
       continue;
     }
 
+    const normalizedEmail = account.email.toLowerCase();
+    const matchingDefaultAccount = DEFAULT_HOSTED_ACCOUNTS.find(
+      (defaultAccount) => defaultAccount.email === normalizedEmail,
+    );
+
     if (account.passwordHash) {
       normalizedAccounts.push({
         ...account,
-        email: account.email.toLowerCase(),
+        email: normalizedEmail,
       });
       continue;
     }
@@ -78,15 +113,18 @@ const normalizeStoredAccounts = async (accounts = []) => {
     if (account.password) {
       normalizedAccounts.push({
         ...account,
-        email: account.email.toLowerCase(),
-        passwordHash: await buildPasswordHash(account.email, account.password),
+        email: normalizedEmail,
+        passwordHash: await buildPasswordHash(
+          normalizedEmail,
+          account.password,
+        ),
       });
       shouldPersist = true;
       continue;
     }
 
-    if (account.email.toLowerCase() === HOSTED_ADMIN_ACCOUNT.email) {
-      normalizedAccounts.push(HOSTED_ADMIN_ACCOUNT);
+    if (matchingDefaultAccount) {
+      normalizedAccounts.push(matchingDefaultAccount);
       shouldPersist = true;
     }
   }
