@@ -65,14 +65,23 @@ const Dashboard = () => {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [selectedFileName, setSelectedFileName] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Tous");
   const [sortOption, setSortOption] = useState("date");
   const [activeSection, setActiveSection] = useState("explorer");
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [showAccountForm, setShowAccountForm] = useState(false);
+  const [documentsData, setDocumentsData] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [isAccountsLoading, setIsAccountsLoading] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [uploadForm, setUploadForm] = useState({
+    title: "",
+    reference: "",
+    category: "",
+    fileName: "",
+  });
+  const [uploadMessage, setUploadMessage] = useState("");
   const [accountForm, setAccountForm] = useState({
     name: "",
     email: "",
@@ -116,6 +125,7 @@ const Dashboard = () => {
   const canAddUsers = isAdmin;
   const canManageAccounts = isAdmin || isSuperviseur;
   const LOCAL_STORAGE_ACCOUNTS_KEY = "itc_accounts";
+  const LOCAL_STORAGE_ARCHIVES_KEY = "itc_archives";
   const logoSrc = `${process.env.PUBLIC_URL}/itc-logo.jpg`;
 
   const defaultAccounts = [
@@ -198,7 +208,16 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadAccounts();
+    setDocumentsData(getLocalArchives());
   }, []);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 220);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchTerm]);
 
   useEffect(() => {
     const updateHeaderOffset = () => {
@@ -224,6 +243,47 @@ const Dashboard = () => {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [activeSection]);
+
+  const handleUploadFieldChange = (field, value) => {
+    setUploadForm((current) => ({ ...current, [field]: value }));
+    setUploadMessage("");
+  };
+
+  const handleSaveDocument = () => {
+    if (!uploadForm.title || !uploadForm.category) {
+      setUploadMessage("Veuillez renseigner le titre et la catégorie.");
+      return;
+    }
+
+    const generatedReference =
+      uploadForm.reference?.trim() ||
+      `ITC-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+
+    const generatedFileName =
+      uploadForm.fileName?.trim() ||
+      `${uploadForm.title.trim().replace(/\s+/g, "_")}.pdf`;
+
+    const uploadTimestamp = new Date().toISOString();
+
+    const nextDocuments = [
+      {
+        id: Date.now(),
+        reference: generatedReference,
+        title: uploadForm.title.trim(),
+        fileName: generatedFileName,
+        category: uploadForm.category,
+        registeredAt: uploadTimestamp.slice(0, 10),
+        uploadedAt: uploadTimestamp,
+      },
+      ...documentsData,
+    ];
+
+    saveLocalArchives(nextDocuments);
+    setUploadForm({ title: "", reference: "", category: "", fileName: "" });
+    setUploadMessage("Document enregistré avec succès dans l'archive locale.");
+    setShowUploadForm(false);
+    setActiveSection("explorer");
+  };
 
   const handleExportReport = () => {
     if (!canExportReports) {
@@ -462,7 +522,56 @@ const Dashboard = () => {
     "Coordination-Orange ITC",
   ];
 
-  const documentsData = [
+  const normalizeDocuments = (items = []) =>
+    items.map((document, index) => {
+      const fallbackDate =
+        document.registeredAt || new Date().toISOString().slice(0, 10);
+      const fallbackHour = String(8 + (index % 8)).padStart(2, "0");
+      const fallbackMinute = String((index * 7) % 60).padStart(2, "0");
+      const uploadedAt =
+        document.uploadedAt ||
+        `${fallbackDate}T${fallbackHour}:${fallbackMinute}:00`;
+
+      return {
+        ...document,
+        registeredAt: uploadedAt.slice(0, 10),
+        uploadedAt,
+      };
+    });
+
+  const getDocumentTimestamp = (document) =>
+    document.uploadedAt || `${document.registeredAt}T08:00:00`;
+
+  const getLocalArchives = () => {
+    try {
+      const storedArchives = JSON.parse(
+        localStorage.getItem(LOCAL_STORAGE_ARCHIVES_KEY) || "null",
+      );
+
+      if (Array.isArray(storedArchives) && storedArchives.length > 0) {
+        return normalizeDocuments(storedArchives);
+      }
+    } catch (error) {
+      console.error("Impossible de lire les archives locales", error);
+    }
+
+    localStorage.setItem(
+      LOCAL_STORAGE_ARCHIVES_KEY,
+      JSON.stringify(normalizeDocuments(defaultDocuments)),
+    );
+    return normalizeDocuments(defaultDocuments);
+  };
+
+  const saveLocalArchives = (nextArchives) => {
+    const normalizedArchives = normalizeDocuments(nextArchives);
+    setDocumentsData(normalizedArchives);
+    localStorage.setItem(
+      LOCAL_STORAGE_ARCHIVES_KEY,
+      JSON.stringify(normalizedArchives),
+    );
+  };
+
+  const defaultDocuments = [
     {
       id: 1,
       reference: "ITC-2026-001",
@@ -582,18 +691,22 @@ const Dashboard = () => {
     return accumulator;
   }, {});
 
+  const normalizedSearchTerm = debouncedSearchTerm.trim().toLowerCase();
+  const hasActiveFilters =
+    categoryFilter !== "Tous" ||
+    sortOption !== "date" ||
+    normalizedSearchTerm !== "";
+
   const documents = documentsData
     .filter((item) => {
       const matchesCategory =
         categoryFilter === "Tous" || categoryFilter === item.category;
       const matchesSearch =
-        searchTerm.trim() === "" ||
-        item.reference
-          .toLowerCase()
-          .includes(searchTerm.trim().toLowerCase()) ||
-        item.fileName.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
-        item.title.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
-        item.category.toLowerCase().includes(searchTerm.trim().toLowerCase());
+        normalizedSearchTerm === "" ||
+        item.reference.toLowerCase().includes(normalizedSearchTerm) ||
+        item.fileName.toLowerCase().includes(normalizedSearchTerm) ||
+        item.title.toLowerCase().includes(normalizedSearchTerm) ||
+        item.category.toLowerCase().includes(normalizedSearchTerm);
 
       return matchesCategory && matchesSearch;
     })
@@ -620,9 +733,28 @@ const Dashboard = () => {
       }
 
       return (
-        new Date(secondItem.registeredAt) - new Date(firstItem.registeredAt)
+        new Date(getDocumentTimestamp(secondItem)) -
+        new Date(getDocumentTimestamp(firstItem))
       );
     });
+
+  const documentsByMonth = documents.reduce((groups, document) => {
+    const monthLabel = new Date(
+      getDocumentTimestamp(document),
+    ).toLocaleDateString("fr-FR", {
+      month: "long",
+      year: "numeric",
+    });
+
+    if (!groups[monthLabel]) {
+      groups[monthLabel] = [];
+    }
+
+    groups[monthLabel].push(document);
+    return groups;
+  }, {});
+
+  const groupedDocuments = Object.entries(documentsByMonth);
 
   const stats = [
     {
@@ -712,10 +844,12 @@ const Dashboard = () => {
 
   const latestArchiveDate = documentsData.reduce(
     (latestDate, document) => {
-      const currentDate = new Date(`${document.registeredAt}T12:00:00`);
+      const currentDate = new Date(getDocumentTimestamp(document));
       return currentDate > latestDate ? currentDate : latestDate;
     },
-    new Date(`${documentsData[0]?.registeredAt || "2026-04-15"}T12:00:00`),
+    new Date(
+      getDocumentTimestamp(documentsData[0] || { registeredAt: "2026-04-15" }),
+    ),
   );
 
   const activityByDay = Array.from({ length: 7 }, (_, index) => {
@@ -733,7 +867,7 @@ const Dashboard = () => {
         month: "short",
       }),
       count: documentsData.filter(
-        (document) => document.registeredAt === dateKey,
+        (document) => getDocumentTimestamp(document).slice(0, 10) === dateKey,
       ).length,
     };
   });
@@ -820,7 +954,7 @@ const Dashboard = () => {
   ].filter((item) => item.visible);
 
   return (
-    <div className="dashboard-shell min-h-screen bg-gray-50 font-sans text-slate-900">
+    <div className="dashboard-shell modern-dashboard min-h-screen bg-gray-50 font-sans text-slate-900">
       <header ref={headerRef} className="website-header">
         <div className="website-nav-bar">
           <div className="website-nav-top">
@@ -831,8 +965,8 @@ const Dashboard = () => {
                   alt="ITC"
                   style={{
                     display: "block",
-                    height: "3rem",
-                    width: "3rem",
+                    height: "3.3rem",
+                    width: "3.3rem",
                     objectFit: "contain",
                     borderRadius: "0.75rem",
                   }}
@@ -913,10 +1047,20 @@ const Dashboard = () => {
         {activeSection === "explorer" && (
           <div className="archive-page-stack">
             <div className="document-space-banner document-space-content-banner mb-8">
-              <p className="document-space-kicker">Espace documentaire</p>
+              <p className="document-space-kicker">Portail documentaire ITC</p>
               <h2 className="document-space-heading">
-                Tableau de bord des archives
+                Une expérience plus claire pour rechercher, suivre et valoriser
+                vos archives
               </h2>
+              <p className="document-space-description">
+                Accédez rapidement à vos documents, filtrez les contenus
+                importants et gardez une vue synthétique de toute l’activité.
+              </p>
+              <div className="document-space-pills">
+                <span>Recherche rapide</span>
+                <span>Suivi en temps réel</span>
+                <span>Accès sécurisé</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
@@ -1114,19 +1258,44 @@ const Dashboard = () => {
               </div>
             </section>
 
-            <div className="flex justify-between items-center mb-6 bg-white border border-gray-100 rounded-2xl p-4">
-              <p className="text-sm font-semibold text-slate-700">
-                Trier les documents par :
-              </p>
-              <select
-                value={sortOption}
-                onChange={(e) => setSortOption(e.target.value)}
-                className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-slate-700"
-              >
-                <option value="date">Date</option>
-                <option value="reference">Référence</option>
-                <option value="nom">Nom</option>
-              </select>
+            <div className="flex justify-between items-center flex-wrap gap-3 mb-6 bg-white border border-gray-100 rounded-2xl p-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-700">
+                  Trier les documents par :
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {documents.length} résultat(s)
+                  {normalizedSearchTerm
+                    ? ` pour "${debouncedSearchTerm.trim()}"`
+                    : " disponibles"}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setCategoryFilter("Tous");
+                      setSortOption("date");
+                    }}
+                    className="px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 text-sm font-semibold"
+                  >
+                    Réinitialiser
+                  </button>
+                )}
+
+                <select
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value)}
+                  className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-slate-700"
+                >
+                  <option value="date">Date</option>
+                  <option value="reference">Référence</option>
+                  <option value="nom">Nom</option>
+                </select>
+              </div>
             </div>
 
             <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -1138,76 +1307,140 @@ const Dashboard = () => {
                     : `Documents - ${categoryFilter}`}
                 </h2>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-gray-50/50 text-slate-400 text-[11px] uppercase font-black tracking-widest">
-                    <tr>
-                      <th className="px-8 py-4">Référence</th>
-                      <th className="px-8 py-4">Nom du Document</th>
-                      <th className="px-8 py-4">Catégorie</th>
-                      <th className="px-8 py-4">Date d'enregistrement</th>
-                      <th className="px-8 py-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-sm divide-y divide-gray-50">
-                    {documents.map((item) => (
-                      <tr
-                        key={item.id}
-                        className="hover:bg-blue-50/30 transition-colors group"
-                      >
-                        <td className="px-8 py-5 font-mono text-blue-600 font-bold">
-                          {item.reference}
-                        </td>
-                        <td className="px-8 py-5">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-red-50 text-red-500 rounded-lg group-hover:bg-red-500 group-hover:text-white transition-colors">
-                              <FileText size={18} />
-                            </div>
-                            <span className="font-semibold text-slate-700">
-                              {item.fileName}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-8 py-5">
-                          <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-md text-[11px] font-bold uppercase">
-                            {item.category}
-                          </span>
-                        </td>
-                        <td className="px-8 py-5 text-slate-500 font-medium">
-                          {new Date(item.registeredAt).toLocaleDateString(
-                            "fr-FR",
-                          )}
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                          <div className="inline-flex gap-2 flex-wrap justify-end">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPreviewUrl(
-                                  `http://api.itc.ci/uploads/doc_${item.id}.pdf`,
-                                );
-                                setSelectedFileName(item.fileName);
-                              }}
-                              className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-bold text-xs hover:bg-blue-600 hover:text-white transition-all"
-                            >
-                              Visualiser
-                            </button>
-                            {isArchiviste && (
-                              <a
-                                href={`http://api.itc.ci/uploads/doc_${item.id}.pdf`}
-                                download={item.fileName}
-                                className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-bold text-xs hover:bg-emerald-600 hover:text-white transition-all"
-                              >
-                                Télécharger
-                              </a>
-                            )}
-                          </div>
-                        </td>
+
+              {documents.length > 0 && (
+                <div className="px-6 pt-4 pb-1 flex flex-wrap gap-2">
+                  {groupedDocuments.map(([monthLabel, monthDocuments]) => (
+                    <span
+                      key={monthLabel}
+                      className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold"
+                    >
+                      {monthLabel} · {monthDocuments.length}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {documents.length === 0 ? (
+                <div className="p-8 md:p-10 text-center">
+                  <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-slate-100 text-slate-500 grid place-items-center">
+                    <Search size={18} />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800">
+                    Aucun document trouvé
+                  </h3>
+                  <p className="text-sm text-slate-500 mt-2">
+                    Essayez une autre recherche ou réinitialisez les filtres.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setCategoryFilter("Tous");
+                      setSortOption("date");
+                    }}
+                    className="mt-4 bg-slate-900 text-white px-4 py-2 rounded-lg font-semibold"
+                  >
+                    Afficher toutes les archives
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-gray-50/50 text-slate-400 text-[11px] uppercase font-black tracking-widest">
+                      <tr>
+                        <th className="px-8 py-4">Référence</th>
+                        <th className="px-8 py-4">Nom du Document</th>
+                        <th className="px-8 py-4">Catégorie</th>
+                        <th className="px-8 py-4">Date & heure du versement</th>
+                        <th className="px-8 py-4 text-right">Actions</th>
                       </tr>
+                    </thead>
+                    {groupedDocuments.map(([monthLabel, monthDocuments]) => (
+                      <tbody
+                        key={monthLabel}
+                        className="text-sm divide-y divide-gray-50"
+                      >
+                        <tr>
+                          <td
+                            colSpan={5}
+                            className="px-8 py-3 bg-slate-50 text-slate-700 font-black uppercase tracking-[0.18em] text-[11px]"
+                          >
+                            {monthLabel}
+                          </td>
+                        </tr>
+                        {monthDocuments.map((item) => (
+                          <tr
+                            key={item.id}
+                            className="hover:bg-blue-50/30 transition-colors group"
+                          >
+                            <td className="px-8 py-5 font-mono text-blue-600 font-bold">
+                              {item.reference}
+                            </td>
+                            <td className="px-8 py-5">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-red-50 text-red-500 rounded-lg group-hover:bg-red-500 group-hover:text-white transition-colors">
+                                  <FileText size={18} />
+                                </div>
+                                <span className="font-semibold text-slate-700">
+                                  {item.fileName}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-8 py-5">
+                              <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-md text-[11px] font-bold uppercase">
+                                {item.category}
+                              </span>
+                            </td>
+                            <td className="px-8 py-5 text-slate-500 font-medium">
+                              <div className="flex flex-col gap-1">
+                                <span>
+                                  {new Date(
+                                    getDocumentTimestamp(item),
+                                  ).toLocaleDateString("fr-FR")}
+                                </span>
+                                <span className="text-xs text-slate-400 font-semibold">
+                                  {new Date(
+                                    getDocumentTimestamp(item),
+                                  ).toLocaleTimeString("fr-FR", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-8 py-5 text-right">
+                              <div className="inline-flex gap-2 flex-wrap justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPreviewUrl(
+                                      `http://api.itc.ci/uploads/doc_${item.id}.pdf`,
+                                    );
+                                    setSelectedFileName(item.fileName);
+                                  }}
+                                  className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-bold text-xs hover:bg-blue-600 hover:text-white transition-all"
+                                >
+                                  Visualiser
+                                </button>
+                                {isArchiviste && (
+                                  <a
+                                    href={`http://api.itc.ci/uploads/doc_${item.id}.pdf`}
+                                    download={item.fileName}
+                                    className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-bold text-xs hover:bg-emerald-600 hover:text-white transition-all"
+                                  >
+                                    Télécharger
+                                  </a>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </table>
+                </div>
+              )}
             </section>
           </div>
         )}
@@ -1240,11 +1473,19 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 gap-6">
                 <input
                   type="text"
+                  value={uploadForm.title}
+                  onChange={(e) =>
+                    handleUploadFieldChange("title", e.target.value)
+                  }
                   placeholder="Titre du document"
                   className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 />
                 <input
                   type="text"
+                  value={uploadForm.reference}
+                  onChange={(e) =>
+                    handleUploadFieldChange("reference", e.target.value)
+                  }
                   placeholder="Référence"
                   className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 />
@@ -1265,12 +1506,19 @@ const Dashboard = () => {
                   <div className="grid grid-cols-1 gap-4">
                     <input
                       type="text"
+                      value={uploadForm.title}
+                      onChange={(e) =>
+                        handleUploadFieldChange("title", e.target.value)
+                      }
                       placeholder="Nom du document"
                       className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                     <select
                       className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                      defaultValue=""
+                      value={uploadForm.category}
+                      onChange={(e) =>
+                        handleUploadFieldChange("category", e.target.value)
+                      }
                     >
                       <option value="" disabled>
                         Sélectionner une catégorie
@@ -1283,18 +1531,35 @@ const Dashboard = () => {
                     </select>
                     <input
                       type="file"
+                      onChange={(e) =>
+                        handleUploadFieldChange(
+                          "fileName",
+                          e.target.files?.[0]?.name || "",
+                        )
+                      }
                       className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-200 bg-white shadow-sm"
                     />
+
+                    {uploadMessage && (
+                      <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
+                        {uploadMessage}
+                      </div>
+                    )}
+
                     <div className="flex gap-3">
                       <button
                         type="button"
+                        onClick={handleSaveDocument}
                         className="bg-emerald-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-slate-900 transition-all"
                       >
                         Enregistrer
                       </button>
                       <button
                         type="button"
-                        onClick={() => setShowUploadForm(false)}
+                        onClick={() => {
+                          setShowUploadForm(false);
+                          setUploadMessage("");
+                        }}
                         className="bg-white text-slate-700 px-4 py-3 rounded-lg font-bold border border-gray-200 hover:bg-gray-100 transition-all"
                       >
                         Fermer

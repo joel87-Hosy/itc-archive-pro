@@ -1,6 +1,6 @@
 // frontend/src/pages/Login.jsx
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const Login = () => {
@@ -8,6 +8,7 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const LOCAL_STORAGE_ACCOUNTS_KEY = "itc_accounts";
   const logoSrc = `${process.env.PUBLIC_URL}/itc-logo.jpg`;
@@ -17,6 +18,7 @@ const Login = () => {
       id: 1,
       name: "Admin ITC",
       email: "admin@itc.ci",
+      password: "admin123",
       role: "Administrateur",
       department: "Administration",
     },
@@ -24,6 +26,7 @@ const Login = () => {
       id: 2,
       name: "Superviseur ITC",
       email: "superviseur@itc.ci",
+      password: "super123",
       role: "Superviseur",
       department: "Supervision",
     },
@@ -31,10 +34,56 @@ const Login = () => {
       id: 3,
       name: "Archive ITC",
       email: "archives@itc.ci",
+      password: "archive123",
       role: "Archiviste",
       department: "Archives",
     },
   ];
+
+  useEffect(() => {
+    const lastEmail = localStorage.getItem("itc_last_email") || "";
+    if (lastEmail) {
+      setEmail(lastEmail);
+    }
+  }, []);
+
+  const resolveDefaultPassword = (user = {}) => {
+    if (user.password) return user.password;
+
+    const normalizedRole = (user.role || "").toLowerCase();
+    const normalizedEmail = (user.email || "").toLowerCase();
+
+    if (normalizedRole.includes("admin") || normalizedEmail.includes("admin")) {
+      return "admin123";
+    }
+
+    if (normalizedRole.includes("super") || normalizedEmail.includes("super")) {
+      return "super123";
+    }
+
+    if (
+      normalizedRole.includes("consult") ||
+      normalizedEmail.includes("consult")
+    ) {
+      return "consult123";
+    }
+
+    return "archive123";
+  };
+
+  const persistSession = ({ token, user }) => {
+    localStorage.setItem("itc_token", token);
+    localStorage.setItem("user_role", user.role || "Archiviste");
+    localStorage.setItem("user_name", user.name || email.trim());
+    localStorage.setItem(
+      "user_department",
+      user.department || "Département Technique",
+    );
+    localStorage.setItem(
+      "itc_last_email",
+      (user.email || email.trim()).toLowerCase(),
+    );
+  };
 
   const inferRoleFromEmail = (value) => {
     const normalizedEmail = value.trim().toLowerCase();
@@ -70,67 +119,104 @@ const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError("");
+    setIsSubmitting(true);
 
     try {
-      let users = [];
+      const normalizedEmail = email.trim().toLowerCase();
+
+      if (!normalizedEmail || !password.trim()) {
+        throw new Error(
+          "Veuillez renseigner votre email et votre mot de passe.",
+        );
+      }
 
       try {
-        const response = await fetch("/api/users");
+        const response = await fetch("/api/users/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email: normalizedEmail, password }),
+        });
+
         const result = await response.json();
 
         if (!response.ok) {
-          throw new Error(result.message || "API indisponible");
+          throw new Error(result.message || "Connexion impossible.");
         }
 
-        users = result.data || [];
-      } catch (error) {
-        users = getFallbackAccounts();
+        persistSession({
+          token: result.token || `session-${Date.now()}`,
+          user: {
+            ...result.user,
+            email: normalizedEmail,
+          },
+        });
+
+        navigate("/dashboard");
+        return;
+      } catch (apiError) {
+        const users = getFallbackAccounts();
+        const matchedUser = users.find(
+          (user) => user.email?.toLowerCase() === normalizedEmail,
+        );
+
+        const expectedPassword = resolveDefaultPassword(matchedUser);
+
+        if (!matchedUser || password !== expectedPassword) {
+          throw new Error("Email ou mot de passe incorrect.");
+        }
+
+        persistSession({
+          token: `local-session-${Date.now()}`,
+          user: {
+            ...matchedUser,
+            role: matchedUser.role || inferRoleFromEmail(normalizedEmail),
+            department: matchedUser.department || "Département Technique",
+          },
+        });
+
+        navigate("/dashboard");
       }
-
-      const matchedUser = users.find(
-        (user) => user.email?.toLowerCase() === email.trim().toLowerCase(),
-      );
-
-      const fakeToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
-      const resolvedRole = matchedUser?.role || inferRoleFromEmail(email);
-      const resolvedDepartment =
-        matchedUser?.department || "Département Technique";
-
-      localStorage.setItem("itc_token", fakeToken);
-      localStorage.setItem("user_role", resolvedRole);
-      localStorage.setItem("user_name", matchedUser?.name || email.trim());
-      localStorage.setItem("user_department", resolvedDepartment);
-
-      navigate("/dashboard");
     } catch (error) {
-      setLoginError("Connexion impossible pour le moment.");
+      setLoginError(error.message || "Connexion impossible pour le moment.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="login-shell min-h-screen bg-white flex">
       {/* Côté Gauche : Formulaire */}
-      <div className="flex-1 flex flex-col justify-center px-8 md:px-24 lg:px-32">
-        <div className="mb-10">
+      <div className="login-form-panel flex-1 flex flex-col justify-center px-8 md:px-24 lg:px-32">
+        <div className="mb-10 login-intro-block">
           <div
-            className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 mb-4"
-            style={{ maxWidth: "260px" }}
+            className="login-brand-card bg-white rounded-2xl border border-gray-200 shadow-sm p-3 mb-4"
+            style={{ maxWidth: "285px" }}
           >
             <img
               src={logoSrc}
               alt="ITC"
-              style={{ display: "block", width: "100%" }}
+              style={{
+                display: "block",
+                width: "100%",
+                transform: "scale(1.04)",
+              }}
             />
           </div>
+          <p className="login-kicker">
+            Portail documentaire nouvelle génération
+          </p>
           <h2 className="text-3xl font-black text-slate-900">
             Bienvenue sur Archive Pro
           </h2>
           <p className="text-slate-500 mt-2 font-medium">
-            Connectez-vous pour accéder aux archives d'Ivoire Techno Com.
+            Une interface plus moderne, plus fluide et plus proche des standards
+            des grands sites web.
           </p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-6">
+        <form onSubmit={handleLogin} className="login-form space-y-6">
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">
               Email Professionnel
@@ -143,9 +229,13 @@ const Login = () => {
               <input
                 type="email"
                 required
+                value={email}
                 placeholder="nom.prenom@ivoiretechno.com"
                 className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setLoginError("");
+                }}
               />
             </div>
           </div>
@@ -170,9 +260,13 @@ const Login = () => {
               <input
                 type={showPassword ? "text" : "password"}
                 required
+                value={password}
                 placeholder="••••••••"
                 className="w-full pl-12 pr-12 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setLoginError("");
+                }}
               />
               <button
                 type="button"
@@ -192,9 +286,10 @@ const Login = () => {
 
           <button
             type="submit"
+            disabled={isSubmitting}
             className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-blue-600 transform transition-all active:scale-[0.98] shadow-xl shadow-slate-200"
           >
-            Se connecter au portail
+            {isSubmitting ? "Connexion en cours..." : "Se connecter au portail"}
           </button>
         </form>
 
@@ -204,7 +299,7 @@ const Login = () => {
       </div>
 
       {/* Côté Droit : Visuel (Masqué sur mobile) */}
-      <div className="hidden lg:flex flex-1 bg-slate-900 relative overflow-hidden items-center justify-center p-12">
+      <div className="login-showcase-panel hidden lg:flex flex-1 bg-slate-900 relative overflow-hidden items-center justify-center p-12">
         {/* Cercles décoratifs */}
         <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-blue-600 rounded-full blur-[120px] opacity-20"></div>
         <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-indigo-600 rounded-full blur-[120px] opacity-20"></div>
@@ -218,10 +313,11 @@ const Login = () => {
             />
           </div>
           <h3 className="text-4xl font-black text-white mb-4 leading-tight">
-            Une interface alignée à l'identité ITC.
+            Un style plus vitrine, plus simple et plus professionnel.
           </h3>
-          <p className="text-slate-400 text-lg">
-            Un nouveau regard sur vos archives 🏛️.
+          <p className="text-slate-300 text-lg login-showcase-copy">
+            Retrouvez une navigation plus claire, une recherche immédiate et une
+            expérience inspirée des interfaces modernes.
           </p>
 
           <div className="mt-12 grid grid-cols-2 gap-4 text-left">

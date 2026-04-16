@@ -1,4 +1,29 @@
+const crypto = require("crypto");
 const userStore = require("../services/userStore");
+
+exports.loginUser = async (req, res) => {
+  try {
+    const user = await userStore.authenticateUser(
+      req.body.email,
+      req.body.password,
+    );
+
+    const token = crypto.randomBytes(24).toString("hex");
+
+    res.status(200).json({
+      success: true,
+      message: "Connexion réussie.",
+      token,
+      user,
+      storage: userStore.getStorageMode(),
+    });
+  } catch (error) {
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || "Connexion impossible.",
+    });
+  }
+};
 
 exports.getUsers = async (req, res) => {
   try {

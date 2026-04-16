@@ -207,6 +207,36 @@ async function updateUser(id, payload) {
   return sanitizeUser(users[userIndex]);
 }
 
+async function authenticateUser(email, password) {
+  const normalizedEmail = email?.trim().toLowerCase();
+  const normalizedPassword = password?.trim();
+
+  if (!normalizedEmail || !normalizedPassword) {
+    throw buildError("Veuillez renseigner votre email et votre mot de passe.");
+  }
+
+  if (storageMode === "database") {
+    const user = await User.findOne({ where: { email: normalizedEmail } });
+
+    if (!user || user.password !== normalizedPassword) {
+      throw buildError("Email ou mot de passe incorrect.", 401);
+    }
+
+    return sanitizeUser(user);
+  }
+
+  const users = await readUsersFromFile();
+  const user = users.find(
+    (item) => item.email?.toLowerCase() === normalizedEmail,
+  );
+
+  if (!user || (user.password || "changeme123") !== normalizedPassword) {
+    throw buildError("Email ou mot de passe incorrect.", 401);
+  }
+
+  return sanitizeUser(user);
+}
+
 async function deleteUser(id) {
   const normalizedId = Number(id);
 
@@ -239,6 +269,7 @@ module.exports = {
   listUsers,
   createUser,
   updateUser,
+  authenticateUser,
   deleteUser,
   getStorageMode,
 };
