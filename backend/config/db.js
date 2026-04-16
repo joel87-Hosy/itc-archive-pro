@@ -1,3 +1,4 @@
+const path = require("path");
 const { Sequelize } = require("sequelize");
 
 const {
@@ -9,13 +10,17 @@ const {
   DB_PORT = "5432",
 } = process.env;
 
-const databaseUrl =
-  DATABASE_URL ||
-  `postgres://${encodeURIComponent(DB_USER)}:${encodeURIComponent(DB_PASS)}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
+const hasExternalDatabase = Boolean(DATABASE_URL);
 
-const sequelize = new Sequelize(databaseUrl, {
-  dialect: "postgres",
-  logging: false,
-});
+const sequelize = hasExternalDatabase
+  ? new Sequelize(DATABASE_URL, {
+      dialect: "postgres",
+      logging: false,
+    })
+  : new Sequelize({
+      dialect: "sqlite",
+      storage: path.join(__dirname, "..", "data", "itc_archive.sqlite"),
+      logging: false,
+    });
 
 module.exports = sequelize;

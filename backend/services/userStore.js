@@ -98,8 +98,19 @@ async function initUserStore() {
     storageMode = "database";
 
     const userCount = await User.count();
-    if (userCount === 0 && DEFAULT_USERS.length > 0) {
-      await User.bulkCreate(DEFAULT_USERS.map(({ id, ...user }) => user));
+    if (userCount === 0) {
+      const existingFileUsers = await readUsersFromFile();
+      const seedUsers =
+        existingFileUsers.length > 0 ? existingFileUsers : DEFAULT_USERS;
+
+      if (seedUsers.length > 0) {
+        await User.bulkCreate(
+          seedUsers.map(({ id, ...user }) => ({
+            ...user,
+            password: normalizePassword(user.password),
+          })),
+        );
+      }
     }
 
     const users = await User.findAll();
