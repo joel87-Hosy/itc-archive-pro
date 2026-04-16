@@ -111,8 +111,7 @@ const Login = () => {
             Bienvenue sur Archive Pro
           </h2>
           <p className="text-slate-500 mt-2 font-medium">
-            Une interface plus moderne avec des comptes désormais gérés côté
-            serveur pour plus de sécurité.
+            Connectez-vous pour accéder à votre espace d'archivage sécurisé.
           </p>
         </div>
 
@@ -213,7 +212,8 @@ const Login = () => {
             />
           </div>
           <h3 className="text-4xl font-black text-white mb-4 leading-tight">
-            Un style plus vitrine, plus simple et plus professionnel.
+            Archive Pro une Plateforme d'archivage numérique sécurisée et facile
+            à utiliser, conçue pour les professionnels de l'archivage.
           </h3>
           <p className="text-slate-300 text-lg login-showcase-copy">
             Retrouvez une navigation plus claire, une recherche immédiate et une
