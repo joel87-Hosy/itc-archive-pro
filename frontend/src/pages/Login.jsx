@@ -1,5 +1,5 @@
 // frontend/src/pages/Login.jsx
-import { Eye, EyeOff, Lock, Mail, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -10,6 +10,7 @@ const Login = () => {
   const [loginError, setLoginError] = useState("");
   const navigate = useNavigate();
   const LOCAL_STORAGE_ACCOUNTS_KEY = "itc_accounts";
+  const logoSrc = `${process.env.PUBLIC_URL}/itc-logo.jpg`;
 
   const defaultAccounts = [
     {
@@ -111,10 +112,19 @@ const Login = () => {
       {/* Côté Gauche : Formulaire */}
       <div className="flex-1 flex flex-col justify-center px-8 md:px-24 lg:px-32">
         <div className="mb-10">
-          <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold mb-4 shadow-lg shadow-blue-200">
-            ITC
+          <div
+            className="bg-white rounded-2xl border border-gray-200 shadow-sm p-3 mb-4"
+            style={{ maxWidth: "260px" }}
+          >
+            <img
+              src={logoSrc}
+              alt="ITC"
+              style={{ display: "block", width: "100%" }}
+            />
           </div>
-          <h2 className="text-3xl font-black text-slate-900">Bienvenue</h2>
+          <h2 className="text-3xl font-black text-slate-900">
+            Bienvenue sur Archive Pro
+          </h2>
           <p className="text-slate-500 mt-2 font-medium">
             Connectez-vous pour accéder aux archives d'Ivoire Techno Com.
           </p>
@@ -200,15 +210,18 @@ const Login = () => {
         <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-indigo-600 rounded-full blur-[120px] opacity-20"></div>
 
         <div className="relative z-10 text-center max-w-md">
-          <div className="inline-flex p-4 bg-white/5 backdrop-blur-lg border border-white/10 rounded-3xl mb-8">
-            <ShieldCheck size={64} className="text-blue-400" />
+          <div className="inline-flex p-4 bg-white rounded-3xl mb-8 shadow-xl">
+            <img
+              src={logoSrc}
+              alt="ITC"
+              style={{ display: "block", width: "220px", maxWidth: "100%" }}
+            />
           </div>
           <h3 className="text-4xl font-black text-white mb-4 leading-tight">
-            Sécurité de niveau entreprise.
+            Une interface alignée à l'identité ITC.
           </h3>
           <p className="text-slate-400 text-lg">
-            Vos données sont chiffrées et protégées par les protocoles de
-            sécurité les plus stricts de l'industrie.
+            Un nouveau regard sur vos archives 🏛️.
           </p>
 
           <div className="mt-12 grid grid-cols-2 gap-4 text-left">

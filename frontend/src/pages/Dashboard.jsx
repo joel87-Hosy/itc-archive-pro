@@ -11,8 +11,9 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { exportArchivesToExcel } from "../utils/exportArchives";
 
 // --- COMPOSANT : VISUALISEUR DE DOCUMENTS ---
 const DocumentViewer = ({ fileUrl, fileName, onClose }) => {
@@ -79,6 +80,8 @@ const Dashboard = () => {
     role: "",
   });
   const [accountMessage, setAccountMessage] = useState("");
+  const headerRef = useRef(null);
+  const mainContentRef = useRef(null);
   const navigate = useNavigate();
 
   const normalizeRoleLabel = (role = "") => {
@@ -113,6 +116,7 @@ const Dashboard = () => {
   const canAddUsers = isAdmin;
   const canManageAccounts = isAdmin || isSuperviseur;
   const LOCAL_STORAGE_ACCOUNTS_KEY = "itc_accounts";
+  const logoSrc = `${process.env.PUBLIC_URL}/itc-logo.jpg`;
 
   const defaultAccounts = [
     {
@@ -196,12 +200,42 @@ const Dashboard = () => {
     loadAccounts();
   }, []);
 
+  useEffect(() => {
+    const updateHeaderOffset = () => {
+      const headerHeight = headerRef.current?.offsetHeight || 0;
+      document.documentElement.style.setProperty(
+        "--dashboard-header-offset",
+        `${headerHeight + 12}px`,
+      );
+    };
+
+    updateHeaderOffset();
+    window.addEventListener("resize", updateHeaderOffset);
+
+    return () => {
+      window.removeEventListener("resize", updateHeaderOffset);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [activeSection]);
+
   const handleExportReport = () => {
     if (!canExportReports) {
       return;
     }
 
-    window.open("http://api.itc.ci/api/reports/export-csv", "_blank");
+    if (documents.length === 0) {
+      window.alert("Aucun document disponible pour l'export.");
+      return;
+    }
+
+    exportArchivesToExcel(documents);
   };
 
   const handleLogout = () => {
@@ -652,115 +686,246 @@ const Dashboard = () => {
         ]
       : stats.filter((stat) => stat.label === categoryFilter);
 
+  const totalDocuments = documentsData.length || 1;
+  const activeCategories = stats.filter((stat) => stat.count > 0);
+  const categoryAnalytics = activeCategories.map((stat, index) => ({
+    ...stat,
+    percent: Math.round((stat.count / totalDocuments) * 100),
+    shortLabel: stat.label
+      .replace("Gestion Stock ITC", "Stock")
+      .replace("Supervision ITC", "Supervision")
+      .replace("Corrdination-Moov ITC", "Moov")
+      .replace("Coordination-Orange ITC", "Orange")
+      .replace("Attachement ITC", "Attachement"),
+    barClass: [
+      "bg-blue-500",
+      "bg-violet-500",
+      "bg-emerald-500",
+      "bg-amber-500",
+    ][index % 4],
+  }));
+
+  const maxCategoryCount = Math.max(
+    ...categoryAnalytics.map((item) => item.count),
+    1,
+  );
+
+  const latestArchiveDate = documentsData.reduce(
+    (latestDate, document) => {
+      const currentDate = new Date(`${document.registeredAt}T12:00:00`);
+      return currentDate > latestDate ? currentDate : latestDate;
+    },
+    new Date(`${documentsData[0]?.registeredAt || "2026-04-15"}T12:00:00`),
+  );
+
+  const activityByDay = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(latestArchiveDate);
+    day.setDate(latestArchiveDate.getDate() - (6 - index));
+
+    const year = day.getFullYear();
+    const month = String(day.getMonth() + 1).padStart(2, "0");
+    const dayNumber = String(day.getDate()).padStart(2, "0");
+    const dateKey = `${year}-${month}-${dayNumber}`;
+
+    return {
+      label: day.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "short",
+      }),
+      count: documentsData.filter(
+        (document) => document.registeredAt === dateKey,
+      ).length,
+    };
+  });
+
+  const maxActivityCount = Math.max(
+    ...activityByDay.map((day) => day.count),
+    1,
+  );
+
+  const workflowSteps = [
+    {
+      title: "Collecte",
+      value: totalDocuments,
+      note: "Documents reçus",
+      accent: "bg-blue-500",
+    },
+    {
+      title: "Classement",
+      value: activeCategories.length,
+      note: "Catégories actives",
+      accent: "bg-violet-500",
+    },
+    {
+      title: "Suivi",
+      value: documents.length,
+      note: "Documents affichés",
+      accent: "bg-emerald-500",
+    },
+    {
+      title: "Comptes",
+      value: accounts.length,
+      note: "Utilisateurs suivis",
+      accent: "bg-amber-500",
+    },
+  ];
+
+  const overviewMetrics = [
+    {
+      label: "Résultats visibles",
+      value: Math.round((documents.length / totalDocuments) * 100),
+      detail: `${documents.length} / ${totalDocuments} documents`,
+      barClass: "bg-blue-500",
+    },
+    {
+      label: "Couverture catégories",
+      value: Math.round(
+        (activeCategories.length / Math.max(categories.length - 1, 1)) * 100,
+      ),
+      detail: `${activeCategories.length} catégories actives`,
+      barClass: "bg-violet-500",
+    },
+    {
+      label: "Comptes configurés",
+      value: Math.min(
+        100,
+        Math.round(
+          (accounts.length / Math.max(defaultAccounts.length, 1)) * 100,
+        ),
+      ),
+      detail: `${accounts.length} comptes`,
+      barClass: "bg-emerald-500",
+    },
+  ];
+
+  const navigationItems = [
+    {
+      key: "explorer",
+      label: "Archives",
+      icon: Database,
+      visible: true,
+    },
+    {
+      key: "upload",
+      label: "Versement",
+      icon: Upload,
+      visible: canUploadDocuments,
+    },
+    {
+      key: "admin",
+      label: "Administration",
+      icon: Shield,
+      visible: canAccessAdministration,
+    },
+  ].filter((item) => item.visible);
+
   return (
-    <div className="dashboard-shell min-h-screen bg-gray-50 flex font-sans text-slate-900">
-      {/* Sidebar */}
-      <aside className="dashboard-sidebar w-64 bg-slate-900 text-white p-6 flex flex-col shadow-xl">
-        <div className="mb-10">
-          <h1 className="text-xl font-black tracking-tighter text-blue-400">
-            ITC ARCHIVE PRO
-          </h1>
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">
-            Enterprise Management v5.0
-          </p>
+    <div className="dashboard-shell min-h-screen bg-gray-50 font-sans text-slate-900">
+      <header ref={headerRef} className="website-header">
+        <div className="website-nav-bar">
+          <div className="website-nav-top">
+            <div className="website-brand">
+              <div className="website-brand-logo">
+                <img
+                  src={logoSrc}
+                  alt="ITC"
+                  style={{
+                    display: "block",
+                    height: "3rem",
+                    width: "3rem",
+                    objectFit: "contain",
+                    borderRadius: "0.75rem",
+                  }}
+                />
+              </div>
+
+              <div className="min-w-0">
+                <h1 className="website-brand-title">ARCHIVE PRO</h1>
+                <p className="website-brand-subtitle">
+                  Portail documentaire ITC
+                </p>
+              </div>
+            </div>
+
+            <div className="website-menu-search relative group">
+              <Search
+                className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors"
+                size={18}
+              />
+              <input
+                type="text"
+                placeholder="Rechercher une archive..."
+                className="w-full pl-12 pr-4 py-3 rounded-full border border-gray-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <div className="website-actions">
+              <div className="website-user-card">
+                <p className="text-sm font-bold">{displayRole}</p>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  {displayDepartment}
+                </p>
+              </div>
+
+              {canExportReports && (
+                <button
+                  onClick={handleExportReport}
+                  className="website-cta website-export"
+                >
+                  <FileSpreadsheet size={18} /> Exporter
+                </button>
+              )}
+
+              <button
+                onClick={handleLogout}
+                className="website-cta website-logout"
+              >
+                <LogOut size={18} /> Déconnexion
+              </button>
+            </div>
+          </div>
+
+          <div className="website-tabs-bar">
+            <nav className="website-menu" aria-label="Navigation principale">
+              {navigationItems.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setActiveSection(key)}
+                  className={`website-menu-button ${
+                    activeSection === key ? "active" : ""
+                  }`}
+                >
+                  <Icon size={16} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
         </div>
+      </header>
 
-        <nav className="space-y-2 flex-1">
-          <button
-            type="button"
-            onClick={() => setActiveSection("explorer")}
-            className={`flex items-center gap-3 w-full p-3 rounded-lg font-medium transition-all ${
-              activeSection === "explorer"
-                ? "bg-blue-600 shadow-lg shadow-blue-900/20"
-                : "hover:bg-slate-800 text-slate-300 transition-colors"
-            }`}
-          >
-            <Database size={18} /> Explorateur
-          </button>
-          {canUploadDocuments && (
-            <button
-              type="button"
-              onClick={() => setActiveSection("upload")}
-              className={`flex items-center gap-3 w-full p-3 rounded-lg font-medium transition-all ${
-                activeSection === "upload"
-                  ? "bg-blue-600 shadow-lg shadow-blue-900/20"
-                  : "hover:bg-slate-800 text-slate-300 transition-colors"
-              }`}
-            >
-              <Upload size={18} /> Verser un document
-            </button>
-          )}
-          {canAccessAdministration && (
-            <button
-              type="button"
-              onClick={() => setActiveSection("admin")}
-              className={`flex items-center gap-3 w-full p-3 rounded-lg font-medium transition-all ${
-                activeSection === "admin"
-                  ? "bg-blue-600 shadow-lg shadow-blue-900/20"
-                  : "hover:bg-slate-800 text-slate-300 transition-colors"
-              }`}
-            >
-              <Shield size={18} /> Administration
-            </button>
-          )}
-        </nav>
-
-        <div className="mt-auto pt-6 border-t border-slate-800 space-y-2">
-          {canExportReports && (
-            <button
-              onClick={handleExportReport}
-              className="flex items-center gap-3 w-full p-3 bg-emerald-600/10 text-emerald-400 border border-emerald-600/20 rounded-lg hover:bg-emerald-600 hover:text-white transition-all"
-            >
-              <FileSpreadsheet size={18} /> Exporter Rapport
-            </button>
-          )}
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 w-full p-3 bg-white/5 text-slate-300 border border-white/10 rounded-lg hover:bg-red-500 hover:text-white transition-all"
-          >
-            <LogOut size={18} /> Déconnexion
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="dashboard-main min-w-0 flex-1 p-8 overflow-y-auto">
+      <main
+        ref={mainContentRef}
+        className="dashboard-main min-w-0 px-4 lg:px-8 py-4"
+      >
         {activeSection === "explorer" && (
-          <>
-            <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-              <div className="relative w-full md:w-2/3 lg:w-1/2 group">
-                <Search
-                  className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors"
-                  size={20}
-                />
-                <input
-                  type="text"
-                  placeholder="Recherche rapide : Référence, titre, ou mots-clés..."
-                  className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+          <div className="archive-page-stack">
+            <div className="document-space-banner document-space-content-banner mb-8">
+              <p className="document-space-kicker">Espace documentaire</p>
+              <h2 className="document-space-heading">
+                Tableau de bord des archives
+              </h2>
+            </div>
 
-              <div className="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-gray-100">
-                <div className="text-right hidden sm:block">
-                  <p className="text-sm font-bold">{displayRole}</p>
-                  <p className="text-[11px] text-slate-500 font-medium">
-                    {displayDepartment}
-                  </p>
-                </div>
-                <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-bold text-white shadow-inner">
-                  ITC
-                </div>
-              </div>
-            </header>
-
-            <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
               {categories.map((cat) => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setCategoryFilter(cat)}
-                  className={`px-5 py-2 rounded-full text-sm font-semibold transition-all whitespace-nowrap ${
+                  className={`px-4 py-3 rounded-xl text-sm font-semibold transition-all text-center ${
                     categoryFilter === cat
                       ? "bg-slate-900 text-white shadow-md"
                       : "bg-white text-slate-600 border border-gray-200 hover:border-blue-400"
@@ -771,7 +936,7 @@ const Dashboard = () => {
               ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
               {displayedStats.map((stat) => (
                 <div
                   key={stat.label}
@@ -786,6 +951,168 @@ const Dashboard = () => {
                 </div>
               ))}
             </div>
+
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <div className="flex items-center justify-between mb-5 gap-4">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
+                      Graphique bâtonné
+                    </p>
+                    <h2 className="text-lg font-black text-slate-800">
+                      Archives par catégorie
+                    </h2>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 text-xs font-bold">
+                    {totalDocuments} documents suivis
+                  </div>
+                </div>
+
+                <div className="flex items-end justify-between gap-3 h-64">
+                  {categoryAnalytics.map((item) => (
+                    <div
+                      key={item.label}
+                      className="flex-1 min-w-0 h-full flex flex-col justify-end items-center gap-2"
+                    >
+                      <span className="text-[11px] font-bold text-slate-500">
+                        {item.count}
+                      </span>
+                      <div className="w-full max-w-[56px] h-44 bg-slate-100 rounded-t-2xl rounded-b-md overflow-hidden flex items-end">
+                        <div
+                          className={`${item.barClass} w-full rounded-t-2xl`}
+                          style={{
+                            height: `${Math.max(
+                              14,
+                              (item.count / maxCategoryCount) * 100,
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-semibold text-center leading-tight">
+                        {item.shortLabel}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-1">
+                  Diagramme
+                </p>
+                <h2 className="text-lg font-black text-slate-800 mb-5">
+                  Flux documentaire
+                </h2>
+
+                <div className="space-y-3">
+                  {workflowSteps.map((step, index) => (
+                    <div key={step.title} className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-xl ${step.accent} text-white grid place-items-center font-black`}
+                      >
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-bold text-slate-800">
+                              {step.title}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {step.note}
+                            </p>
+                          </div>
+                          <span className="text-lg font-black text-slate-800">
+                            {step.value}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 font-bold uppercase tracking-wide">
+                  <span>Collecte</span>
+                  <span>→</span>
+                  <span>Classement</span>
+                  <span>→</span>
+                  <span>Suivi</span>
+                  <span>→</span>
+                  <span>Accès</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-1">
+                  Graphique bâtonné
+                </p>
+                <h2 className="text-lg font-black text-slate-800 mb-5">
+                  Activité des 7 derniers jours
+                </h2>
+
+                <div className="flex items-end justify-between gap-3 h-48">
+                  {activityByDay.map((day) => (
+                    <div
+                      key={day.label}
+                      className="flex-1 h-full flex flex-col justify-end items-center gap-2"
+                    >
+                      <span className="text-[11px] font-bold text-slate-500">
+                        {day.count}
+                      </span>
+                      <div className="w-full max-w-[38px] h-36 bg-slate-100 rounded-t-2xl rounded-b-md flex items-end overflow-hidden">
+                        <div
+                          className="w-full bg-blue-500 rounded-t-2xl"
+                          style={{
+                            height: `${Math.max(
+                              18,
+                              (day.count / maxActivityCount) * 100,
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-semibold text-center">
+                        {day.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-1">
+                  Diagramme de suivi
+                </p>
+                <h2 className="text-lg font-black text-slate-800 mb-5">
+                  Indicateurs opérationnels
+                </h2>
+
+                <div className="space-y-4">
+                  {overviewMetrics.map((metric) => (
+                    <div key={metric.label}>
+                      <div className="flex items-center justify-between mb-1.5 text-sm">
+                        <span className="font-semibold text-slate-700">
+                          {metric.label}
+                        </span>
+                        <span className="text-slate-500 font-bold">
+                          {metric.value}%
+                        </span>
+                      </div>
+                      <div className="h-3 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className={`${metric.barClass} h-full rounded-full`}
+                          style={{ width: `${metric.value}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {metric.detail}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
 
             <div className="flex justify-between items-center mb-6 bg-white border border-gray-100 rounded-2xl p-4">
               <p className="text-sm font-semibold text-slate-700">
@@ -852,18 +1179,29 @@ const Dashboard = () => {
                           )}
                         </td>
                         <td className="px-8 py-5 text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPreviewUrl(
-                                `http://api.itc.ci/uploads/doc_${item.id}.pdf`,
-                              );
-                              setSelectedFileName(item.fileName);
-                            }}
-                            className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-bold text-xs hover:bg-blue-600 hover:text-white transition-all"
-                          >
-                            Visualiser
-                          </button>
+                          <div className="inline-flex gap-2 flex-wrap justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPreviewUrl(
+                                  `http://api.itc.ci/uploads/doc_${item.id}.pdf`,
+                                );
+                                setSelectedFileName(item.fileName);
+                              }}
+                              className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-bold text-xs hover:bg-blue-600 hover:text-white transition-all"
+                            >
+                              Visualiser
+                            </button>
+                            {isArchiviste && (
+                              <a
+                                href={`http://api.itc.ci/uploads/doc_${item.id}.pdf`}
+                                download={item.fileName}
+                                className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-bold text-xs hover:bg-emerald-600 hover:text-white transition-all"
+                              >
+                                Télécharger
+                              </a>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -871,7 +1209,7 @@ const Dashboard = () => {
                 </table>
               </div>
             </section>
-          </>
+          </div>
         )}
 
         {activeSection === "upload" && !canUploadDocuments && (
@@ -995,7 +1333,7 @@ const Dashboard = () => {
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 p-6">
+            <div className="grid grid-cols-1 gap-6 p-6">
               <div className="bg-white p-6 rounded-2xl shadow-sm border-l-4 border-blue-500">
                 <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">
                   Utilisateurs
