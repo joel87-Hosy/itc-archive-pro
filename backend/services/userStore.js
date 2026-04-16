@@ -5,7 +5,16 @@ const sequelize = require("../config/db");
 const User = require("../models/User");
 
 const DATA_FILE = path.join(__dirname, "..", "data", "users.json");
-const DEFAULT_USERS = [];
+const DEFAULT_ADMIN_USER = {
+  id: 1,
+  name: "Admin ITC",
+  email: "admin@itc.ci",
+  password:
+    "scrypt$f974b6231d4e04e872eb40aaf740255f$77611bb3aa01335cf782a37197c427d606de2d0c0ab7bef6270ed0cfcc74cb3486ea9eb2b55727d11a4693b1ad15c714270d476e5ef2dc32698f89243d6cab94",
+  role: "Administrateur",
+  department: "Système",
+};
+const DEFAULT_USERS = [DEFAULT_ADMIN_USER];
 
 let storageMode = "file";
 
@@ -70,14 +79,23 @@ async function readUsersFromFile() {
   const content = await fs.readFile(DATA_FILE, "utf8");
   const users = JSON.parse(content || "[]");
   const safeUsers = Array.isArray(users) ? users : [];
-  const normalizedUsers = safeUsers.map((user) => ({
+  const hasAdminUser = safeUsers.some(
+    (user) => user.email?.toLowerCase() === DEFAULT_ADMIN_USER.email,
+  );
+  const sourceUsers = hasAdminUser
+    ? safeUsers
+    : [DEFAULT_ADMIN_USER, ...safeUsers];
+
+  const normalizedUsers = sourceUsers.map((user) => ({
     ...user,
     password: normalizePassword(user.password),
   }));
 
-  const shouldPersistNormalizedUsers = normalizedUsers.some(
-    (user, index) => user.password !== safeUsers[index]?.password,
-  );
+  const shouldPersistNormalizedUsers =
+    !hasAdminUser ||
+    normalizedUsers.some(
+      (user, index) => user.password !== sourceUsers[index]?.password,
+    );
 
   if (shouldPersistNormalizedUsers) {
     await writeUsersToFile(normalizedUsers);
@@ -114,6 +132,20 @@ async function initUserStore() {
     }
 
     const users = await User.findAll();
+    const hasAdminUser = users.some(
+      (user) => user.email?.toLowerCase() === DEFAULT_ADMIN_USER.email,
+    );
+
+    if (!hasAdminUser) {
+      await User.create({
+        name: DEFAULT_ADMIN_USER.name,
+        email: DEFAULT_ADMIN_USER.email,
+        password: normalizePassword(DEFAULT_ADMIN_USER.password),
+        role: DEFAULT_ADMIN_USER.role,
+        department: DEFAULT_ADMIN_USER.department,
+      });
+    }
+
     for (const user of users) {
       if (!isHashedPassword(user.password || "")) {
         await user.update({ password: normalizePassword(user.password) });
