@@ -18,6 +18,13 @@ const DEFAULT_USERS = [DEFAULT_ADMIN_USER];
 
 let storageMode = "file";
 
+const ALLOWED_ROLES = new Set([
+  "Administrateur",
+  "Archiviste",
+  "Consultation",
+  "Superviseur",
+]);
+
 const isHashedPassword = (value = "") =>
   typeof value === "string" && value.startsWith("scrypt$");
 
@@ -58,6 +65,30 @@ const buildError = (message, status = 400) => {
   const error = new Error(message);
   error.status = status;
   return error;
+};
+
+const validateUserPayload = ({
+  name,
+  email,
+  password,
+  role,
+  requirePassword = false,
+}) => {
+  if (!name || name.length < 3 || name.length > 80) {
+    throw buildError("Le nom doit contenir entre 3 et 80 caractères.");
+  }
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw buildError("Veuillez fournir une adresse email valide.");
+  }
+
+  if (!role || !ALLOWED_ROLES.has(role)) {
+    throw buildError("Le rôle utilisateur fourni est invalide.");
+  }
+
+  if (requirePassword && (!password || password.length < 8)) {
+    throw buildError("Le mot de passe doit contenir au moins 8 caractères.");
+  }
 };
 
 async function ensureDataFile() {
@@ -181,11 +212,13 @@ async function createUser(payload) {
   const role = payload.role?.trim();
   const department = payload.department?.trim() || null;
 
-  if (!name || !email || !password || !role) {
-    throw buildError(
-      "Veuillez renseigner le nom, l'email, le mot de passe et le rôle.",
-    );
-  }
+  validateUserPayload({
+    name,
+    email,
+    password,
+    role,
+    requirePassword: true,
+  });
 
   if (storageMode === "database") {
     const existingUser = await User.findOne({ where: { email } });
@@ -230,9 +263,13 @@ async function updateUser(id, payload) {
   const password = payload.password?.trim();
   const department = payload.department?.trim() || null;
 
-  if (!name || !email || !role) {
-    throw buildError("Veuillez renseigner le nom, l'email et le rôle.");
-  }
+  validateUserPayload({
+    name,
+    email,
+    password,
+    role,
+    requirePassword: false,
+  });
 
   if (storageMode === "database") {
     const user = await User.findByPk(normalizedId);
@@ -322,21 +359,64 @@ async function deleteUser(id) {
   const normalizedId = Number(id);
 
   if (storageMode === "database") {
-    const deletedCount = await User.destroy({ where: { id: normalizedId } });
-    if (!deletedCount) {
+    const user = await User.findByPk(normalizedId);
+
+    if (!user) {
       throw buildError("Compte introuvable.", 404);
     }
+
+    if (user.email?.toLowerCase() === DEFAULT_ADMIN_USER.email) {
+      throw buildError(
+        "Le compte administrateur principal ne peut pas être supprimé.",
+        403,
+      );
+    }
+
+    if (user.role === "Administrateur") {
+      const adminCount = await User.count({
+        where: { role: "Administrateur" },
+      });
+
+      if (adminCount <= 1) {
+        throw buildError(
+          "Au moins un administrateur doit toujours rester actif.",
+          403,
+        );
+      }
+    }
+
+    await user.destroy();
     return;
   }
 
   const users = await readUsersFromFile();
+  const targetUser = users.find((user) => Number(user.id) === normalizedId);
+
+  if (!targetUser) {
+    throw buildError("Compte introuvable.", 404);
+  }
+
+  if (targetUser.email?.toLowerCase() === DEFAULT_ADMIN_USER.email) {
+    throw buildError(
+      "Le compte administrateur principal ne peut pas être supprimé.",
+      403,
+    );
+  }
+
+  const adminCount = users.filter(
+    (user) => user.role === "Administrateur",
+  ).length;
+
+  if (targetUser.role === "Administrateur" && adminCount <= 1) {
+    throw buildError(
+      "Au moins un administrateur doit toujours rester actif.",
+      403,
+    );
+  }
+
   const filteredUsers = users.filter(
     (user) => Number(user.id) !== normalizedId,
   );
-
-  if (filteredUsers.length === users.length) {
-    throw buildError("Compte introuvable.", 404);
-  }
 
   await writeUsersToFile(filteredUsers);
 }

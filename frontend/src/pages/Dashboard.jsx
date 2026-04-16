@@ -134,11 +134,28 @@ const Dashboard = () => {
   const logoSrc = `${process.env.PUBLIC_URL}/itc-logo.jpg`;
   const coverImageUrl = `${process.env.PUBLIC_URL}/image-couverture.png`;
 
+  const getAuthHeaders = (includeJson = true) => {
+    const headers = {};
+    const token = localStorage.getItem("itc_token");
+
+    if (includeJson) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    return headers;
+  };
+
   const loadAccounts = async () => {
     setIsAccountsLoading(true);
 
     try {
-      const response = await fetch("/api/users");
+      const response = await fetch("/api/users", {
+        headers: getAuthHeaders(false),
+      });
       const rawResult = await response.text();
       let result = {};
 
@@ -325,9 +342,7 @@ const Dashboard = () => {
     try {
       const response = await fetch("/api/users", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(accountForm),
       });
       const result = await response.json();
@@ -383,9 +398,7 @@ const Dashboard = () => {
     try {
       const response = await fetch(`/api/users/${selectedAccountId}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(accountForm),
       });
       const result = await response.json();
@@ -432,6 +445,7 @@ const Dashboard = () => {
     try {
       const response = await fetch(`/api/users/${targetAccountId}`, {
         method: "DELETE",
+        headers: getAuthHeaders(false),
       });
       const result = await response.json();
 
