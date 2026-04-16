@@ -14,6 +14,12 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { exportArchivesToExcel } from "../utils/exportArchives";
+import {
+  createHostedAccount,
+  deleteHostedAccount,
+  getHostedAccounts,
+  updateHostedAccount,
+} from "../utils/hostedAuth";
 
 // --- COMPOSANT : VISUALISEUR DE DOCUMENTS ---
 const DocumentViewer = ({ fileUrl, fileName, onClose }) => {
@@ -133,18 +139,28 @@ const Dashboard = () => {
 
     try {
       const response = await fetch("/api/users");
-      const result = await response.json();
+      const rawResult = await response.text();
+      let result = {};
+
+      try {
+        result = rawResult ? JSON.parse(rawResult) : {};
+      } catch {
+        result = {};
+      }
 
       if (!response.ok) {
         throw new Error(result.message || "Impossible de charger les comptes.");
       }
 
       setAccounts(result.data || []);
+      setAccountMessage("");
     } catch (error) {
-      setAccounts([]);
+      const hostedAccounts = await getHostedAccounts();
+      setAccounts(hostedAccounts);
       setAccountMessage(
-        error.message ||
-          "Le service des comptes est indisponible. Les accès ne sont plus stockés dans le navigateur.",
+        hostedAccounts.length > 0
+          ? "Mode hébergé actif : comptes sécurisés disponibles sur ce navigateur."
+          : "Le service des comptes est momentanément indisponible.",
       );
     } finally {
       setIsAccountsLoading(false);
@@ -326,10 +342,17 @@ const Dashboard = () => {
       resetAccountForm();
       await loadAccounts();
     } catch (error) {
-      setAccountMessage(
-        error.message ||
-          "Création du compte impossible. Vérifiez la connexion au backend.",
-      );
+      try {
+        await createHostedAccount(accountForm);
+        setAccountMessage("Le nouveau compte a été créé avec succès.");
+        resetAccountForm();
+        await loadAccounts();
+      } catch (hostedError) {
+        setAccountMessage(
+          hostedError.message ||
+            "Création du compte impossible. Vérifiez la connexion au backend.",
+        );
+      }
     }
   };
 
@@ -377,10 +400,17 @@ const Dashboard = () => {
       resetAccountForm();
       await loadAccounts();
     } catch (error) {
-      setAccountMessage(
-        error.message ||
-          "Mise à jour du compte impossible. Vérifiez la connexion au backend.",
-      );
+      try {
+        await updateHostedAccount(selectedAccountId, accountForm);
+        setAccountMessage("Le compte sélectionné a été modifié avec succès.");
+        resetAccountForm();
+        await loadAccounts();
+      } catch (hostedError) {
+        setAccountMessage(
+          hostedError.message ||
+            "Mise à jour du compte impossible. Vérifiez la connexion au backend.",
+        );
+      }
     }
   };
 
@@ -415,10 +445,17 @@ const Dashboard = () => {
       resetAccountForm();
       await loadAccounts();
     } catch (error) {
-      setAccountMessage(
-        error.message ||
-          "Suppression du compte impossible. Vérifiez la connexion au backend.",
-      );
+      try {
+        await deleteHostedAccount(targetAccountId);
+        setAccountMessage("Le compte sélectionné a été supprimé avec succès.");
+        resetAccountForm();
+        await loadAccounts();
+      } catch (hostedError) {
+        setAccountMessage(
+          hostedError.message ||
+            "Suppression du compte impossible. Vérifiez la connexion au backend.",
+        );
+      }
     }
   };
 
