@@ -171,7 +171,7 @@ const Login = () => {
           </div>
         </div>
 
-        <form onSubmit={handleLogin} className="login-form space-y-6">
+        <form onSubmit={handleLogin} className="login-form space-y-6 ui-reveal">
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">
               Email Professionnel
@@ -276,7 +276,7 @@ const Login = () => {
             expérience convergente entre les usages web, cloud et mobile.
           </p>
 
-          <div className="mt-12 grid grid-cols-2 gap-4 text-left">
+          <div className="mt-12 grid grid-cols-2 gap-4 text-left ui-reveal-delayed">
             <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
               <p className="text-blue-400 font-bold text-xl">100%</p>
               <p className="text-slate-500 text-xs font-bold uppercase">

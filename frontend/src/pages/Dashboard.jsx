@@ -1046,7 +1046,7 @@ const Dashboard = () => {
       >
         {activeSection === "explorer" && (
           <div className="archive-page-stack">
-            <div className="document-space-banner document-space-content-banner mb-8">
+            <div className="document-space-banner document-space-content-banner mb-8 ui-float ui-reveal">
               <p className="document-space-kicker">Portail documentaire ITC</p>
               <h2 className="document-space-heading">
                 Une interface moderne 2026 pour piloter, retrouver et valoriser
@@ -1092,7 +1092,7 @@ const Dashboard = () => {
               {displayedStats.map((stat) => (
                 <div
                   key={stat.label}
-                  className={`bg-white p-6 rounded-2xl shadow-sm border-l-4 ${stat.color}`}
+                  className={`bg-white p-6 rounded-2xl shadow-sm border-l-4 ${stat.color} ui-card-lift ui-reveal`}
                 >
                   <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">
                     {stat.label}
