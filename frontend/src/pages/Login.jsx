@@ -154,20 +154,34 @@ const Login = () => {
               }}
             />
           </div>
-          <p className="login-kicker">
-            Portail documentaire nouvelle génération
-          </p>
-          <h2 className="text-3xl font-black text-slate-900">
-            Bienvenue sur Archive Pro
+          <p className="login-kicker">Portail documentaire nouvelle génération</p>
+          <h2 className="text-3xl font-black text-slate-900 login-intro-title">
+            Le cockpit documentaire
+            <span className="login-gradient-text"> intelligent </span>
+            pour vos équipes
           </h2>
           <p className="text-slate-500 mt-2 font-medium">
-            Connectez-vous pour accéder à votre espace d'archivage sécurisé,
-            enrichi pour l’IA, le cloud-edge et le mobile.
+            Accédez à une plateforme d’archivage premium, rapide et sécurisée,
+            pensée pour une expérience SaaS moderne en 2026.
           </p>
           <div className="login-feature-row">
-            <span className="login-feature-chip">Design 2026</span>
-            <span className="login-feature-chip">Mobile-first</span>
-            <span className="login-feature-chip">Interface intelligente</span>
+            <span className="login-feature-chip">SaaS 2026</span>
+            <span className="login-feature-chip">Sécurité renforcée</span>
+            <span className="login-feature-chip">Recherche IA</span>
+          </div>
+          <div className="login-trust-grid">
+            <div className="login-trust-card">
+              <strong>99,9%</strong>
+              <span>Disponibilité cible</span>
+            </div>
+            <div className="login-trust-card">
+              <strong>Temps réel</strong>
+              <span>Visibilité documentaire</span>
+            </div>
+            <div className="login-trust-card">
+              <strong>Multi-écrans</strong>
+              <span>Web, mobile et edge</span>
+            </div>
           </div>
         </div>
 
@@ -259,7 +273,8 @@ const Login = () => {
         <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-blue-600 rounded-full blur-[120px] opacity-20"></div>
         <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-indigo-600 rounded-full blur-[120px] opacity-20"></div>
 
-        <div className="relative z-10 text-center max-w-md">
+        <div className="relative z-10 text-center max-w-md login-showcase-stack">
+          <div className="login-showcase-badge">SaaS Experience 2026</div>
           <div className="inline-flex p-4 bg-white rounded-3xl mb-8 shadow-xl">
             <img
               src={logoSrc}
@@ -268,27 +283,45 @@ const Login = () => {
             />
           </div>
           <h3 className="text-4xl font-black text-white mb-4 leading-tight">
-            Archive Pro une Plateforme d'archivage numérique sécurisée et facile
-            à utiliser, conçue pour les professionnels de l'archivage.
+            Une plateforme d’archivage premium pour piloter vos documents avec
+            fluidité, sécurité et intelligence.
           </h3>
           <p className="text-slate-300 text-lg login-showcase-copy">
-            Retrouvez une navigation plus claire, une recherche assistée et une
-            expérience convergente entre les usages web, cloud et mobile.
+            Une interface claire, un pilotage visuel immédiat et une expérience
+            digne des meilleurs produits SaaS modernes.
           </p>
 
-          <div className="mt-12 grid grid-cols-2 gap-4 text-left ui-reveal-delayed">
-            <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
+          <div className="login-showcase-grid ui-reveal-delayed">
+            <div className="login-showcase-card">
               <p className="text-blue-400 font-bold text-xl">100%</p>
               <p className="text-slate-500 text-xs font-bold uppercase">
                 Traçabilité
               </p>
             </div>
-            <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
+            <div className="login-showcase-card">
               <p className="text-blue-400 font-bold text-xl">AES-256</p>
               <p className="text-slate-500 text-xs font-bold uppercase">
                 Chiffrement
               </p>
             </div>
+            <div className="login-showcase-card">
+              <p className="text-blue-400 font-bold text-xl">IA</p>
+              <p className="text-slate-500 text-xs font-bold uppercase">
+                Assistance métier
+              </p>
+            </div>
+            <div className="login-showcase-card">
+              <p className="text-blue-400 font-bold text-xl">Cloud + Edge</p>
+              <p className="text-slate-500 text-xs font-bold uppercase">
+                Continuité de service
+              </p>
+            </div>
+          </div>
+
+          <div className="login-showcase-list">
+            <span>Navigation premium</span>
+            <span>Recherche naturelle</span>
+            <span>Expérience multi-supports</span>
           </div>
         </div>
       </div>
