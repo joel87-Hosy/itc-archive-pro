@@ -519,24 +519,47 @@ const Dashboard = () => {
   const getDocumentTimestamp = (document) =>
     document.uploadedAt || `${document.registeredAt}T08:00:00`;
 
+  const seededArchiveReferences = new Set([
+    "ITC-2026-001",
+    "ITC-2026-002",
+    "ITC-2026-003",
+    "ITC-2026-004",
+    "ITC-2026-005",
+    "ITC-2026-006",
+    "ITC-2026-007",
+    "ITC-2026-008",
+    "ITC-2026-009",
+    "ITC-2026-010",
+    "ITC-2026-011",
+    "ITC-2026-012",
+    "ITC-2026-013",
+    "ITC-2026-014",
+  ]);
+
   const getLocalArchives = () => {
     try {
       const storedArchives = JSON.parse(
         localStorage.getItem(LOCAL_STORAGE_ARCHIVES_KEY) || "null",
       );
 
-      if (Array.isArray(storedArchives) && storedArchives.length > 0) {
-        return normalizeDocuments(storedArchives);
+      if (Array.isArray(storedArchives)) {
+        const cleanedArchives = storedArchives.filter(
+          (document) => !seededArchiveReferences.has(document.reference),
+        );
+
+        localStorage.setItem(
+          LOCAL_STORAGE_ARCHIVES_KEY,
+          JSON.stringify(normalizeDocuments(cleanedArchives)),
+        );
+
+        return normalizeDocuments(cleanedArchives);
       }
     } catch (error) {
       console.error("Impossible de lire les archives locales", error);
     }
 
-    localStorage.setItem(
-      LOCAL_STORAGE_ARCHIVES_KEY,
-      JSON.stringify(normalizeDocuments(defaultDocuments)),
-    );
-    return normalizeDocuments(defaultDocuments);
+    localStorage.setItem(LOCAL_STORAGE_ARCHIVES_KEY, JSON.stringify([]));
+    return [];
   };
 
   const saveLocalArchives = (nextArchives) => {
@@ -548,120 +571,7 @@ const Dashboard = () => {
     );
   };
 
-  const defaultDocuments = [
-    {
-      id: 1,
-      reference: "ITC-2026-001",
-      title: "Analyse couverture Nord",
-      fileName: "Analyse_Couverture_Nord.pdf",
-      category: "Etude",
-      registeredAt: "2026-04-14",
-    },
-    {
-      id: 2,
-      reference: "ITC-2026-002",
-      title: "Avant projet fibre urbaine",
-      fileName: "Avant_Projet_Fibre_Urbaine.pdf",
-      category: "Etude",
-      registeredAt: "2026-04-10",
-    },
-    {
-      id: 3,
-      reference: "ITC-2026-003",
-      title: "Bon entrée matériel",
-      fileName: "Bon_Entree_Materiel.pdf",
-      category: "Gestion Stock ITC",
-      registeredAt: "2026-04-13",
-    },
-    {
-      id: 4,
-      reference: "ITC-2026-004",
-      title: "Fiche inventaire entrepôt",
-      fileName: "Fiche_Inventaire_Entrepot.pdf",
-      category: "Gestion Stock ITC",
-      registeredAt: "2026-04-08",
-    },
-    {
-      id: 5,
-      reference: "ITC-2026-005",
-      title: "Contrat assistant RH",
-      fileName: "Contrat_Assistant_RH.pdf",
-      category: "RH",
-      registeredAt: "2026-04-12",
-    },
-    {
-      id: 6,
-      reference: "ITC-2026-006",
-      title: "Dossier formation interne",
-      fileName: "Dossier_Formation_Interne.pdf",
-      category: "RH",
-      registeredAt: "2026-04-07",
-    },
-    {
-      id: 7,
-      reference: "ITC-2026-007",
-      title: "Budget mensuel exploitation",
-      fileName: "Budget_Mensuel_Exploitation.pdf",
-      category: "Finance",
-      registeredAt: "2026-04-11",
-    },
-    {
-      id: 8,
-      reference: "ITC-2026-008",
-      title: "Facture fournisseur réseau",
-      fileName: "Facture_Fournisseur_Reseau.pdf",
-      category: "Finance",
-      registeredAt: "2026-04-06",
-    },
-    {
-      id: 9,
-      reference: "ITC-2026-009",
-      title: "Alerte supervision backbone",
-      fileName: "Alerte_Supervision_Backbone.pdf",
-      category: "Supervision ITC",
-      registeredAt: "2026-04-15",
-    },
-    {
-      id: 10,
-      reference: "ITC-2026-010",
-      title: "Rapport supervision accès",
-      fileName: "Rapport_Supervision_Acces.pdf",
-      category: "Supervision ITC",
-      registeredAt: "2026-04-05",
-    },
-    {
-      id: 11,
-      reference: "ITC-2026-011",
-      title: "Compte rendu réunion Moov",
-      fileName: "Compte_Rendu_Reunion_Moov.pdf",
-      category: "Corrdination-Moov ITC",
-      registeredAt: "2026-04-09",
-    },
-    {
-      id: 12,
-      reference: "ITC-2026-012",
-      title: "Planning intervention Moov",
-      fileName: "Planning_Intervention_Moov.pdf",
-      category: "Corrdination-Moov ITC",
-      registeredAt: "2026-04-04",
-    },
-    {
-      id: 13,
-      reference: "ITC-2026-013",
-      title: "Compte rendu réunion Orange",
-      fileName: "Compte_Rendu_Reunion_Orange.pdf",
-      category: "Coordination-Orange ITC",
-      registeredAt: "2026-04-03",
-    },
-    {
-      id: 14,
-      reference: "ITC-2026-014",
-      title: "Suivi déploiement Orange",
-      fileName: "Suivi_Deploiement_Orange.pdf",
-      category: "Coordination-Orange ITC",
-      registeredAt: "2026-04-15",
-    },
-  ];
+  const defaultDocuments = [];
 
   const categoryOrder = categories.reduce((accumulator, category, index) => {
     accumulator[category] = index;
@@ -807,11 +717,12 @@ const Dashboard = () => {
     setActiveSection("explorer");
   };
 
-  const totalDocuments = documentsData.length || 1;
+  const totalDocuments = documentsData.length;
+  const safeTotalDocuments = Math.max(totalDocuments, 1);
   const activeCategories = stats.filter((stat) => stat.count > 0);
   const categoryAnalytics = activeCategories.map((stat, index) => ({
     ...stat,
-    percent: Math.round((stat.count / totalDocuments) * 100),
+    percent: Math.round((stat.count / safeTotalDocuments) * 100),
     shortLabel: stat.label
       .replace("Gestion Stock ITC", "Stock")
       .replace("Supervision ITC", "Supervision")
@@ -896,7 +807,7 @@ const Dashboard = () => {
   const overviewMetrics = [
     {
       label: "Résultats visibles",
-      value: Math.round((documents.length / totalDocuments) * 100),
+      value: Math.round((documents.length / safeTotalDocuments) * 100),
       detail: `${documents.length} / ${totalDocuments} documents`,
       barClass: "bg-blue-500",
     },
