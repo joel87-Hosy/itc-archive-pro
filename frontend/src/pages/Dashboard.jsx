@@ -782,6 +782,18 @@ const Dashboard = () => {
         ]
       : stats.filter((stat) => stat.label === categoryFilter);
 
+  const handleApplySmartSearch = ({
+    category = "Tous",
+    searchTerm: smartSearchTerm = "",
+    sortOption: nextSortOption = "date",
+  }) => {
+    setCategoryFilter(category || "Tous");
+    setSearchTerm(smartSearchTerm);
+    setDebouncedSearchTerm(smartSearchTerm);
+    setSortOption(nextSortOption || "date");
+    setActiveSection("explorer");
+  };
+
   const totalDocuments = documentsData.length || 1;
   const activeCategories = stats.filter((stat) => stat.count > 0);
   const categoryAnalytics = activeCategories.map((stat, index) => ({
@@ -953,6 +965,7 @@ const Dashboard = () => {
               />
               <input
                 type="text"
+                value={searchTerm}
                 placeholder="Rechercher une archive..."
                 className="w-full pl-12 pr-4 py-3 rounded-full border border-gray-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -1033,6 +1046,7 @@ const Dashboard = () => {
               accounts={accounts}
               displayRole={displayRole}
               searchTerm={debouncedSearchTerm}
+              onApplySmartSearch={handleApplySmartSearch}
             />
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">

@@ -67,6 +67,72 @@ const buildAssistantReply = (message = "", context = {}) => {
   return `Vue métier : ${documentsCount} document(s) suivis, dont ${recentDocumentsCount} récent(s). La catégorie dominante reste ${dominantCategory}.`;
 };
 
+const interpretNaturalSearch = (query = "") => {
+  const normalized = normalizeText(query);
+
+  const categoryMap = [
+    { keyword: "finance", category: "Finance" },
+    { keyword: "rh", category: "RH" },
+    { keyword: "ressources humaines", category: "RH" },
+    { keyword: "stock", category: "Gestion Stock ITC" },
+    { keyword: "supervision", category: "Supervision ITC" },
+    { keyword: "moov", category: "Corrdination-Moov ITC" },
+    { keyword: "orange", category: "Coordination-Orange ITC" },
+    { keyword: "etude", category: "Etude" },
+    { keyword: "attachement", category: "Attachement ITC" },
+  ];
+
+  const matchedCategory =
+    categoryMap.find((item) => normalized.includes(item.keyword))?.category ||
+    "Tous";
+
+  const sortOption = normalized.includes("reference")
+    ? "reference"
+    : normalized.includes("nom") || normalized.includes("titre")
+      ? "nom"
+      : "date";
+
+  const ignoredWords = new Set([
+    "montre",
+    "moi",
+    "documents",
+    "document",
+    "archives",
+    "archive",
+    "des",
+    "les",
+    "la",
+    "le",
+    "de",
+    "du",
+    "en",
+    "pour",
+    "avec",
+    "cette",
+    "semaine",
+    "recent",
+    "recents",
+    "priorite",
+    "prioriser",
+  ]);
+
+  const searchTokens = normalized
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2 && !ignoredWords.has(token));
+
+  const searchTerm = searchTokens[0] || matchedCategory;
+
+  return {
+    category: matchedCategory,
+    searchTerm: searchTerm === "Tous" ? "" : searchTerm,
+    sortOption,
+    explanation:
+      matchedCategory === "Tous"
+        ? `Recherche intelligente appliquée avec le mot-clé ${searchTerm || "général"}.`
+        : `Recherche intelligente orientée vers la catégorie ${matchedCategory}.`,
+  };
+};
+
 const allowedOrigins = new Set(
   [
     process.env.FRONTEND_ORIGIN,
@@ -188,6 +254,15 @@ app.post("/api/innovation/assistant", (req, res) => {
       reply: buildAssistantReply(message, context),
       generatedAt: new Date().toISOString(),
     },
+  });
+});
+
+app.post("/api/innovation/natural-search", (req, res) => {
+  const { query } = req.body || {};
+
+  res.status(200).json({
+    success: true,
+    data: interpretNaturalSearch(query),
   });
 });
 
