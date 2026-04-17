@@ -1027,17 +1027,17 @@ const Dashboard = () => {
             <div className="document-space-banner document-space-content-banner mb-8">
               <p className="document-space-kicker">Portail documentaire ITC</p>
               <h2 className="document-space-heading">
-                Une expérience plus claire pour rechercher, suivre et valoriser
-                vos archives
+                Une interface moderne 2026 pour piloter, retrouver et valoriser
+                vos archives plus vite
               </h2>
               <p className="document-space-description">
-                Accédez rapidement à vos documents, filtrez les contenus
-                importants et gardez une vue synthétique de toute l’activité.
+                Profitez d’un design plus premium, d’une navigation plus fluide
+                et d’une lecture visuelle plus nette sur web comme sur mobile.
               </p>
               <div className="document-space-pills">
-                <span>Recherche rapide</span>
-                <span>Suivi en temps réel</span>
-                <span>Accès sécurisé</span>
+                <span>Interface premium</span>
+                <span>Recherche IA</span>
+                <span>Pilotage visuel</span>
               </div>
             </div>
 

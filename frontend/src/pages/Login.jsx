@@ -142,6 +142,11 @@ const Login = () => {
             Connectez-vous pour accéder à votre espace d'archivage sécurisé,
             enrichi pour l’IA, le cloud-edge et le mobile.
           </p>
+          <div className="login-feature-row">
+            <span className="login-feature-chip">Design 2026</span>
+            <span className="login-feature-chip">Mobile-first</span>
+            <span className="login-feature-chip">Interface intelligente</span>
+          </div>
         </div>
 
         <form onSubmit={handleLogin} className="login-form space-y-6">
