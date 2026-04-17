@@ -154,20 +154,22 @@ const Login = () => {
               }}
             />
           </div>
-          <p className="login-kicker">Portail documentaire nouvelle génération</p>
+          <p className="login-kicker">
+            Portail documentaire nouvelle génération
+          </p>
           <h2 className="text-3xl font-black text-slate-900 login-intro-title">
-            Le cockpit documentaire
-            <span className="login-gradient-text"> intelligent </span>
-            pour vos équipes
+            Gouvernez votre patrimoine documentaire avec une
+            <span className="login-gradient-text"> expérience enterprise </span>
+            de niveau international
           </h2>
-          <p className="text-slate-500 mt-2 font-medium">
-            Accédez à une plateforme d’archivage premium, rapide et sécurisée,
-            pensée pour une expérience SaaS moderne en 2026.
+          <p className="text-slate-500 mt-2 font-medium login-intro-copy">
+            Archive Pro centralise, sécurise et valorise vos documents métiers
+            dans une interface premium conçue pour les organisations modernes.
           </p>
           <div className="login-feature-row">
-            <span className="login-feature-chip">SaaS 2026</span>
-            <span className="login-feature-chip">Sécurité renforcée</span>
-            <span className="login-feature-chip">Recherche IA</span>
+            <span className="login-feature-chip">Enterprise UX</span>
+            <span className="login-feature-chip">Sécurité avancée</span>
+            <span className="login-feature-chip">Intelligence documentaire</span>
           </div>
           <div className="login-trust-grid">
             <div className="login-trust-card">
@@ -319,7 +321,7 @@ const Login = () => {
           </div>
 
           <div className="login-showcase-list">
-            <span>Navigation premium</span>
+            <span>Navigation executive</span>
             <span>Recherche naturelle</span>
             <span>Expérience multi-supports</span>
           </div>
