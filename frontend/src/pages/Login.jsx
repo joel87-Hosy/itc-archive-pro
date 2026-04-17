@@ -169,7 +169,9 @@ const Login = () => {
           <div className="login-feature-row">
             <span className="login-feature-chip">Enterprise UX</span>
             <span className="login-feature-chip">Sécurité avancée</span>
-            <span className="login-feature-chip">Intelligence documentaire</span>
+            <span className="login-feature-chip">
+              Intelligence documentaire
+            </span>
           </div>
           <div className="login-trust-grid">
             <div className="login-trust-card">

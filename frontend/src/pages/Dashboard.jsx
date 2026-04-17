@@ -1049,17 +1049,32 @@ const Dashboard = () => {
             <div className="document-space-banner document-space-content-banner mb-8 ui-float ui-reveal">
               <p className="document-space-kicker">Portail documentaire ITC</p>
               <h2 className="document-space-heading">
-                Une interface moderne 2026 pour piloter, retrouver et valoriser
-                vos archives plus vite
+                Le centre de commandement documentaire pour des opérations ITC
+                plus rapides, plus claires et plus sûres
               </h2>
               <p className="document-space-description">
-                Profitez d’un design plus premium, d’une navigation plus fluide
-                et d’une lecture visuelle plus nette sur web comme sur mobile.
+                Supervisez vos archives, vos flux métiers et vos accès depuis un
+                espace de travail premium inspiré des meilleurs standards
+                enterprise internationaux.
               </p>
               <div className="document-space-pills">
-                <span>Interface premium</span>
+                <span>Executive workspace</span>
                 <span>Recherche IA</span>
-                <span>Pilotage visuel</span>
+                <span>Pilotage temps réel</span>
+              </div>
+              <div className="document-space-highlights">
+                <div className="document-space-highlight">
+                  <strong>{documentsData.length}</strong>
+                  <span>archives actives</span>
+                </div>
+                <div className="document-space-highlight">
+                  <strong>{activeCategories.length}</strong>
+                  <span>pôles suivis</span>
+                </div>
+                <div className="document-space-highlight">
+                  <strong>{displayRole}</strong>
+                  <span>niveau d’accès</span>
+                </div>
               </div>
             </div>
 
@@ -1092,7 +1107,7 @@ const Dashboard = () => {
               {displayedStats.map((stat) => (
                 <div
                   key={stat.label}
-                  className={`bg-white p-6 rounded-2xl shadow-sm border-l-4 ${stat.color} ui-card-lift ui-reveal`}
+                  className={`bg-white p-6 rounded-2xl shadow-sm border-l-4 ${stat.color} ui-card-lift ui-reveal premium-panel`}
                 >
                   <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">
                     {stat.label}
@@ -1105,7 +1120,7 @@ const Dashboard = () => {
             </div>
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 premium-panel">
                 <div className="flex items-center justify-between mb-5 gap-4">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
@@ -1148,7 +1163,7 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 premium-panel">
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-1">
                   Diagramme
                 </p>
@@ -1196,7 +1211,7 @@ const Dashboard = () => {
             </section>
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 premium-panel">
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-1">
                   Graphique bâtonné
                 </p>
@@ -1232,7 +1247,7 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 premium-panel">
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-1">
                   Diagramme de suivi
                 </p>
@@ -1266,7 +1281,7 @@ const Dashboard = () => {
               </div>
             </section>
 
-            <div className="flex justify-between items-center flex-wrap gap-3 mb-6 bg-white border border-gray-100 rounded-2xl p-4">
+            <div className="flex justify-between items-center flex-wrap gap-3 mb-6 bg-white border border-gray-100 rounded-2xl p-4 premium-panel">
               <div>
                 <p className="text-sm font-semibold text-slate-700">
                   Trier les documents par :
@@ -1306,7 +1321,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden premium-panel">
               <div className="p-6 border-b border-gray-50 flex justify-between items-center">
                 <h2 className="font-bold text-slate-800 text-lg flex items-center gap-2">
                   <Filter size={18} className="text-blue-500" />

@@ -906,10 +906,14 @@ tbody tr:hover {
   gap: 0.7rem;
   padding: 1rem 1.35rem;
   border-radius: 0 0 30px 30px;
-  background: rgba(255, 255, 255, 0.72);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.84),
+    rgba(241, 247, 255, 0.78)
+  );
   border: 1px solid rgba(96, 165, 250, 0.18);
   border-top: none;
-  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 24px 55px rgba(15, 23, 42, 0.14);
 }
 
 .website-nav-top {
@@ -1018,6 +1022,49 @@ tbody tr:hover {
   color: var(--blue-600);
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+.document-space-highlights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+  max-width: 46rem;
+}
+
+.document-space-highlight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(96, 165, 250, 0.14);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06);
+}
+
+.document-space-highlight strong {
+  font-size: 1rem;
+  font-weight: 900;
+  color: var(--slate-900);
+}
+
+.document-space-highlight span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--slate-500);
+}
+
+.premium-panel {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.94),
+    rgba(245, 249, 255, 0.98)
+  );
+  border-color: rgba(148, 163, 184, 0.16);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
 }
 
 .website-brand {
@@ -1350,7 +1397,11 @@ tbody tr:hover {
   gap: 0.2rem;
   padding: 0.95rem;
   border-radius: 1rem;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(240, 247, 255, 0.92));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.86),
+    rgba(240, 247, 255, 0.92)
+  );
   border: 1px solid rgba(96, 165, 250, 0.16);
   box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06);
 }
@@ -1449,7 +1500,11 @@ tbody tr:hover {
   padding: 1rem;
   text-align: left;
   border-radius: 1rem;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(148, 163, 184, 0.06));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.09),
+    rgba(148, 163, 184, 0.06)
+  );
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
@@ -1534,6 +1589,8 @@ tbody tr:hover {
 [data-theme="dark"] .login-brand-card,
 [data-theme="dark"] .website-user-card,
 [data-theme="dark"] .login-feature-chip,
+[data-theme="dark"] .document-space-highlight,
+[data-theme="dark"] .premium-panel,
 [data-theme="dark"] .modern-dashboard .bg-white.rounded-2xl,
 [data-theme="dark"] .modern-dashboard section.bg-white,
 [data-theme="dark"] .bg-white {
