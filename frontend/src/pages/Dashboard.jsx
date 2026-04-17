@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import InnovationHub from "../components/InnovationHub";
 import { exportArchivesToExcel } from "../utils/exportArchives";
 import {
   createHostedAccount,
@@ -1026,6 +1027,13 @@ const Dashboard = () => {
                 <span>Accès sécurisé</span>
               </div>
             </div>
+
+            <InnovationHub
+              documentsData={documentsData}
+              accounts={accounts}
+              displayRole={displayRole}
+              searchTerm={debouncedSearchTerm}
+            />
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
               {categories.map((cat) => (

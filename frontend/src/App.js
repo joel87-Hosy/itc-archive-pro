@@ -1,4 +1,5 @@
 // frontend/src/App.js
+import { useEffect } from "react";
 import {
   Navigate,
   Route,
@@ -15,6 +16,16 @@ const PrivateRoute = ({ children }) => {
 };
 
 function App() {
+  useEffect(() => {
+    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register(
+          `${process.env.PUBLIC_URL}/service-worker.js`,
+        );
+      });
+    }
+  }, []);
+
   return (
     <Router>
       <Routes>

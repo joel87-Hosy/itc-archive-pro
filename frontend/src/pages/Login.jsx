@@ -139,7 +139,8 @@ const Login = () => {
             Bienvenue sur Archive Pro
           </h2>
           <p className="text-slate-500 mt-2 font-medium">
-            Connectez-vous pour accéder à votre espace d'archivage sécurisé.
+            Connectez-vous pour accéder à votre espace d'archivage sécurisé,
+            enrichi pour l’IA, le cloud-edge et le mobile.
           </p>
         </div>
 
@@ -244,8 +245,8 @@ const Login = () => {
             à utiliser, conçue pour les professionnels de l'archivage.
           </h3>
           <p className="text-slate-300 text-lg login-showcase-copy">
-            Retrouvez une navigation plus claire, une recherche immédiate et une
-            expérience inspirée des interfaces modernes.
+            Retrouvez une navigation plus claire, une recherche assistée et une
+            expérience convergente entre les usages web, cloud et mobile.
           </p>
 
           <div className="mt-12 grid grid-cols-2 gap-4 text-left">

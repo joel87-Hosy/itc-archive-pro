@@ -80,6 +80,48 @@ app.get("/", (req, res) => {
   });
 });
 
+app.get("/api/innovation/overview", (req, res) => {
+  const deploymentMode = process.env.DATABASE_URL
+    ? "cloud-connected"
+    : "edge-ready";
+
+  res.status(200).json({
+    success: true,
+    data: {
+      app: "ITC Archive Pro",
+      deploymentMode,
+      syncStatus:
+        deploymentMode === "cloud-connected"
+          ? "Synchronisation cloud disponible avec continuité locale."
+          : "Mode edge local prêt, avec extension cloud possible.",
+      generatedAt: new Date().toISOString(),
+      capabilities: [
+        {
+          id: "agents-genai",
+          title: "IA ubiquitaire",
+          summary:
+            "Des assistants contextuels peuvent enrichir la recherche, le tri et la valorisation documentaire sans perturber le flux existant.",
+          status: "Prêt",
+        },
+        {
+          id: "cloud-edge",
+          title: "Architectures Cloud & Edge",
+          summary:
+            "Le portail supporte une exploitation locale robuste avec une ouverture vers la synchronisation cloud sécurisée.",
+          status: deploymentMode === "cloud-connected" ? "Connecté" : "Local",
+        },
+        {
+          id: "web-mobile",
+          title: "Convergence Web & Mobile",
+          summary:
+            "L’interface actuelle reste compatible avec une expérience responsive et multi-écrans.",
+          status: "Actif",
+        },
+      ],
+    },
+  });
+});
+
 app.use("/api/archives", archiveRoutes);
 app.use("/api/users", userRoutes);
 
