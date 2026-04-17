@@ -1,5 +1,5 @@
 // frontend/src/pages/Login.jsx
-import { Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authenticateHostedUser } from "../utils/hostedAuth";
@@ -10,6 +10,11 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [theme, setTheme] = useState(
+    () =>
+      (typeof window !== "undefined" && localStorage.getItem("itc_theme")) ||
+      "light",
+  );
   const navigate = useNavigate();
   const logoSrc = `${process.env.PUBLIC_URL}/itc-logo.jpg`;
   const coverImageUrl = `${process.env.PUBLIC_URL}/image-couverture.png`;
@@ -21,6 +26,12 @@ const Login = () => {
       setEmail(lastEmail);
     }
   }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.style.colorScheme = theme;
+    localStorage.setItem("itc_theme", theme);
+  }, [theme]);
 
   const persistSession = ({ token, user }) => {
     localStorage.setItem("itc_token", token);
@@ -117,6 +128,17 @@ const Login = () => {
     >
       {/* Côté Gauche : Formulaire */}
       <div className="login-form-panel flex-1 flex flex-col justify-center px-8 md:px-24 lg:px-32">
+        <div className="login-top-bar">
+          <button
+            type="button"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="theme-toggle-button"
+          >
+            {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+            <span>{theme === "dark" ? "Mode clair" : "Mode sombre"}</span>
+          </button>
+        </div>
+
         <div className="mb-10 login-intro-block">
           <div
             className="login-brand-card bg-white rounded-2xl border border-gray-200 shadow-sm p-3 mb-4"

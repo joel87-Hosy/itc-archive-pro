@@ -17,6 +17,16 @@ const PrivateRoute = ({ children }) => {
 
 function App() {
   useEffect(() => {
+    const storedTheme = localStorage.getItem("itc_theme");
+    const preferredTheme = window.matchMedia("(prefers-color-scheme: dark)")
+      .matches
+      ? "dark"
+      : "light";
+    const activeTheme = storedTheme || preferredTheme;
+
+    document.documentElement.setAttribute("data-theme", activeTheme);
+    document.documentElement.style.colorScheme = activeTheme;
+
     if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
       window.addEventListener("load", () => {
         navigator.serviceWorker.register(

@@ -5,9 +5,11 @@ import {
   FileText,
   Filter,
   LogOut,
+  Moon,
   Printer,
   Search,
   Shield,
+  Sun,
   Upload,
   X,
 } from "lucide-react";
@@ -96,6 +98,11 @@ const Dashboard = () => {
     role: "",
   });
   const [accountMessage, setAccountMessage] = useState("");
+  const [theme, setTheme] = useState(
+    () =>
+      (typeof window !== "undefined" && localStorage.getItem("itc_theme")) ||
+      "light",
+  );
   const headerRef = useRef(null);
   const mainContentRef = useRef(null);
   const navigate = useNavigate();
@@ -190,6 +197,12 @@ const Dashboard = () => {
     loadAccounts();
     setDocumentsData(getLocalArchives());
   }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.style.colorScheme = theme;
+    localStorage.setItem("itc_theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -973,6 +986,15 @@ const Dashboard = () => {
             </div>
 
             <div className="website-actions">
+              <button
+                type="button"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className="website-cta website-theme-toggle"
+              >
+                {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+                {theme === "dark" ? "Clair" : "Sombre"}
+              </button>
+
               <div className="website-user-card">
                 <p className="text-sm font-bold">{displayRole}</p>
                 <p className="text-[11px] text-slate-500 font-medium">
