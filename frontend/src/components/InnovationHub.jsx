@@ -57,6 +57,11 @@ const InnovationHub = ({
   searchTerm = "",
 }) => {
   const [overview, setOverview] = useState(fallbackOverview);
+  const [assistantPrompt, setAssistantPrompt] = useState("");
+  const [assistantReply, setAssistantReply] = useState(
+    "Bonjour. Je peux vous aider à prioriser les archives, guider la recherche et recommander le meilleur mode d’exploitation.",
+  );
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isOnline, setIsOnline] = useState(
     typeof window === "undefined" ? true : window.navigator.onLine,
   );
@@ -150,6 +155,53 @@ const InnovationHub = ({
     return suggestions.slice(0, 4);
   }, [accounts.length, dominantCategory, isOnline, searchTerm]);
 
+  const askAssistant = async (prompt) => {
+    const cleanPrompt = prompt.trim();
+
+    if (!cleanPrompt) {
+      setAssistantReply(
+        "Saisissez une question métier, par exemple sur la recherche, la priorité documentaire ou le mode cloud/mobile.",
+      );
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      const response = await fetch("/api/innovation/assistant", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: cleanPrompt,
+          context: {
+            documentsCount: documentsData.length,
+            recentDocumentsCount,
+            accountsCount: accounts.length,
+            dominantCategory,
+            role: displayRole,
+            isOnline,
+          },
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result?.data?.reply) {
+        throw new Error("Réponse indisponible");
+      }
+
+      setAssistantReply(result.data.reply);
+    } catch {
+      setAssistantReply(
+        `Vue métier : ${documentsData.length} document(s) suivis, ${recentDocumentsCount} récent(s), catégorie dominante ${dominantCategory}.`,
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <section className="mb-10 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-xl">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -237,6 +289,60 @@ const InnovationHub = ({
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-slate-950/45 p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-100">
+              Assistant IA métier
+            </p>
+            <h3 className="mt-1 text-lg font-black text-white">
+              Posez une question sur vos archives
+            </h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              "Que faut-il prioriser ?",
+              "Conseil pour la recherche",
+              "Mode cloud ou edge ?",
+            ].map((sample) => (
+              <button
+                key={sample}
+                type="button"
+                onClick={() => {
+                  setAssistantPrompt(sample);
+                  askAssistant(sample);
+                }}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-100"
+              >
+                {sample}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
+          <textarea
+            value={assistantPrompt}
+            onChange={(event) => setAssistantPrompt(event.target.value)}
+            rows={3}
+            placeholder="Exemple : quels documents dois-je traiter en priorité cette semaine ?"
+            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
+          />
+          <button
+            type="button"
+            onClick={() => askAssistant(assistantPrompt)}
+            disabled={isGenerating}
+            className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isGenerating ? "Analyse..." : "Interroger l'assistant"}
+          </button>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-100">
+          {assistantReply}
         </div>
       </div>
     </section>

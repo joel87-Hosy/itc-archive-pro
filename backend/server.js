@@ -10,6 +10,63 @@ const { initUserStore } = require("./services/userStore");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const normalizeText = (value = "") =>
+  value
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const buildAssistantReply = (message = "", context = {}) => {
+  const normalized = normalizeText(message);
+  const documentsCount = Number(context.documentsCount || 0);
+  const recentDocumentsCount = Number(context.recentDocumentsCount || 0);
+  const accountsCount = Number(context.accountsCount || 0);
+  const dominantCategory = context.dominantCategory || "Archives générales";
+  const role = context.role || "Utilisateur";
+  const isOnline = Boolean(context.isOnline);
+
+  if (!normalized.trim()) {
+    return "Je peux vous aider à prioriser les archives, améliorer la recherche et conseiller le mode cloud ou mobile.";
+  }
+
+  if (normalized.includes("prior") || normalized.includes("urgent")) {
+    return `Priorité recommandée : surveiller la catégorie ${dominantCategory}, qui concentre actuellement la plus forte activité documentaire.`;
+  }
+
+  if (normalized.includes("mobile") || normalized.includes("terrain")) {
+    return "Pour les équipes terrain, l’application peut être utilisée en mode mobile avec continuité locale et synchronisation ultérieure.";
+  }
+
+  if (
+    normalized.includes("cloud") ||
+    normalized.includes("edge") ||
+    normalized.includes("sync")
+  ) {
+    return isOnline
+      ? "Le portail est prêt pour une extension cloud sécurisée tout en gardant une continuité edge locale."
+      : "Le portail fonctionne actuellement en logique edge locale, adaptée aux coupures réseau et à une future synchronisation cloud.";
+  }
+
+  if (
+    normalized.includes("recherche") ||
+    normalized.includes("search") ||
+    normalized.includes("trouver")
+  ) {
+    return `Conseil de recherche : combinez la catégorie ${dominantCategory} avec une référence ou un mot métier pour obtenir des résultats plus précis.`;
+  }
+
+  if (
+    normalized.includes("compte") ||
+    normalized.includes("utilisateur") ||
+    normalized.includes("equipe")
+  ) {
+    return `${accountsCount} compte(s) sont disponibles. Le rôle actif ${role} peut piloter les accès selon les règles déjà en place.`;
+  }
+
+  return `Vue métier : ${documentsCount} document(s) suivis, dont ${recentDocumentsCount} récent(s). La catégorie dominante reste ${dominantCategory}.`;
+};
+
 const allowedOrigins = new Set(
   [
     process.env.FRONTEND_ORIGIN,
@@ -118,6 +175,18 @@ app.get("/api/innovation/overview", (req, res) => {
           status: "Actif",
         },
       ],
+    },
+  });
+});
+
+app.post("/api/innovation/assistant", (req, res) => {
+  const { message, context } = req.body || {};
+
+  res.status(200).json({
+    success: true,
+    data: {
+      reply: buildAssistantReply(message, context),
+      generatedAt: new Date().toISOString(),
     },
   });
 });
