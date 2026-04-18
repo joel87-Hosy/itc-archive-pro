@@ -10,6 +10,7 @@ import {
   Search,
   Shield,
   Sun,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -81,6 +82,7 @@ const Dashboard = () => {
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [documentsData, setDocumentsData] = useState([]);
+  const [documentMessage, setDocumentMessage] = useState("");
   const [accounts, setAccounts] = useState([]);
   const [isAccountsLoading, setIsAccountsLoading] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState("");
@@ -89,6 +91,7 @@ const Dashboard = () => {
     reference: "",
     category: "",
     fileName: "",
+    file: null,
   });
   const [uploadMessage, setUploadMessage] = useState("");
   const [accountForm, setAccountForm] = useState({
@@ -192,10 +195,66 @@ const Dashboard = () => {
     }
   };
 
+  const buildDocumentFileUrl = (document) => {
+    if (document.filePath) {
+      const normalizedPath = String(document.filePath).replace(/\\/g, "/");
+      const fileName = normalizedPath.split("/").pop();
+
+      if (fileName) {
+        return `/uploads/${fileName}`;
+      }
+    }
+
+    return `http://api.itc.ci/uploads/doc_${document.id}.pdf`;
+  };
+
+  const loadDocuments = async () => {
+    const localArchives = getLocalArchives();
+    setDocumentsData(localArchives);
+
+    const token = localStorage.getItem("itc_token");
+
+    if (!token) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/archives", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const rawResult = await response.text();
+      let result = {};
+
+      try {
+        result = rawResult ? JSON.parse(rawResult) : {};
+      } catch {
+        result = {};
+      }
+
+      if (!response.ok) {
+        throw new Error(result.message || "Impossible de charger les documents serveur.");
+      }
+
+      if (!Array.isArray(result.data)) {
+        throw new Error("Format de réponse invalide pour les documents.");
+      }
+
+      saveLocalArchives(result.data);
+      setDocumentMessage("");
+    } catch (error) {
+      setDocumentMessage(
+        "Mode local actif: la synchronisation des documents serveur est indisponible.",
+      );
+    }
+  };
+
   useEffect(() => {
     localStorage.removeItem("itc_accounts");
     loadAccounts();
-    setDocumentsData(getLocalArchives());
+    loadDocuments();
   }, []);
 
   useEffect(() => {
@@ -242,7 +301,7 @@ const Dashboard = () => {
     setUploadMessage("");
   };
 
-  const handleSaveDocument = () => {
+  const handleSaveDocument = async () => {
     if (!uploadForm.title || !uploadForm.category) {
       setUploadMessage("Veuillez renseigner le titre et la catégorie.");
       return;
@@ -253,8 +312,67 @@ const Dashboard = () => {
       `ITC-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
 
     const generatedFileName =
+      uploadForm.file?.name ||
       uploadForm.fileName?.trim() ||
       `${uploadForm.title.trim().replace(/\s+/g, "_")}.pdf`;
+
+    const token = localStorage.getItem("itc_token");
+
+    if (token) {
+      if (!uploadForm.file) {
+        setUploadMessage("Veuillez sélectionner un fichier à téléverser.");
+        return;
+      }
+
+      try {
+        const payload = new FormData();
+        payload.append("title", uploadForm.title.trim());
+        payload.append("reference", generatedReference);
+        payload.append("category", uploadForm.category);
+        payload.append("retentionYears", "5");
+        payload.append("file", uploadForm.file);
+
+        const response = await fetch("/api/archives/upload", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: payload,
+        });
+
+        const rawResult = await response.text();
+        let result = {};
+
+        try {
+          result = rawResult ? JSON.parse(rawResult) : {};
+        } catch {
+          result = {};
+        }
+
+        if (!response.ok) {
+          throw new Error(result.message || "Échec du versement du document.");
+        }
+
+        await loadDocuments();
+        setUploadForm({
+          title: "",
+          reference: "",
+          category: "",
+          fileName: "",
+          file: null,
+        });
+        setUploadMessage("Document versé avec succès sur le serveur.");
+        setDocumentMessage("");
+        setShowUploadForm(false);
+        setActiveSection("explorer");
+        return;
+      } catch (error) {
+        setUploadMessage(
+          error.message || "Impossible de verser le document sur le serveur.",
+        );
+        return;
+      }
+    }
 
     const uploadTimestamp = new Date().toISOString();
 
@@ -272,10 +390,75 @@ const Dashboard = () => {
     ];
 
     saveLocalArchives(nextDocuments);
-    setUploadForm({ title: "", reference: "", category: "", fileName: "" });
+    setUploadForm({
+      title: "",
+      reference: "",
+      category: "",
+      fileName: "",
+      file: null,
+    });
     setUploadMessage("Document enregistré avec succès dans l'archive locale.");
+    setDocumentMessage("");
     setShowUploadForm(false);
     setActiveSection("explorer");
+  };
+
+  const handleDeleteDocument = async (document) => {
+    if (!isArchiviste) {
+      return;
+    }
+
+    const hasConfirmed = window.confirm(
+      `Voulez-vous vraiment supprimer le document "${document.fileName}" ?`,
+    );
+
+    if (!hasConfirmed) {
+      return;
+    }
+
+    const token = localStorage.getItem("itc_token");
+    let backendMessage = "";
+
+    if (token) {
+      try {
+        const response = await fetch(`/api/archives/${document.id}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const rawResult = await response.text();
+        let result = {};
+
+        try {
+          result = rawResult ? JSON.parse(rawResult) : {};
+        } catch {
+          result = {};
+        }
+
+        if (!response.ok && response.status !== 404) {
+          throw new Error(result.message || "Suppression serveur impossible.");
+        }
+
+        backendMessage =
+          response.status === 404
+            ? " (document non trouvé sur le serveur, suppression locale appliquée)"
+            : " (supprimé du serveur)";
+      } catch (error) {
+        setDocumentMessage(
+          error.message ||
+            "Échec de la suppression côté serveur. Le document est conservé.",
+        );
+        return;
+      }
+    }
+
+    const nextDocuments = documentsData.filter((item) => item.id !== document.id);
+    saveLocalArchives(nextDocuments);
+    setDocumentMessage(
+      `Le document "${document.fileName}" a été supprimé${backendMessage}.`,
+    );
   };
 
   const handleExportReport = () => {
@@ -1242,6 +1425,12 @@ const Dashboard = () => {
                 </h2>
               </div>
 
+              {documentMessage && (
+                <div className="mx-6 mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                  {documentMessage}
+                </div>
+              )}
+
               {documents.length > 0 && (
                 <div className="px-6 pt-4 pb-1 flex flex-wrap gap-2">
                   {groupedDocuments.map(([monthLabel, monthDocuments]) => (
@@ -1348,9 +1537,7 @@ const Dashboard = () => {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setPreviewUrl(
-                                      `http://api.itc.ci/uploads/doc_${item.id}.pdf`,
-                                    );
+                                    setPreviewUrl(buildDocumentFileUrl(item));
                                     setSelectedFileName(item.fileName);
                                   }}
                                   className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-bold text-xs hover:bg-blue-600 hover:text-white transition-all"
@@ -1359,12 +1546,22 @@ const Dashboard = () => {
                                 </button>
                                 {isArchiviste && (
                                   <a
-                                    href={`http://api.itc.ci/uploads/doc_${item.id}.pdf`}
+                                    href={buildDocumentFileUrl(item)}
                                     download={item.fileName}
                                     className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-bold text-xs hover:bg-emerald-600 hover:text-white transition-all"
                                   >
                                     Télécharger
                                   </a>
+                                )}
+                                {isArchiviste && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteDocument(item)}
+                                    className="inline-flex items-center gap-1 bg-red-50 text-red-600 px-4 py-2 rounded-lg font-bold text-xs hover:bg-red-600 hover:text-white transition-all"
+                                  >
+                                    <Trash2 size={14} />
+                                    Supprimer
+                                  </button>
                                 )}
                               </div>
                             </td>
@@ -1465,12 +1662,14 @@ const Dashboard = () => {
                     </select>
                     <input
                       type="file"
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const selectedFile = e.target.files?.[0] || null;
+                        handleUploadFieldChange("file", selectedFile);
                         handleUploadFieldChange(
                           "fileName",
-                          e.target.files?.[0]?.name || "",
-                        )
-                      }
+                          selectedFile?.name || "",
+                        );
+                      }}
                       className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-200 bg-white shadow-sm"
                     />
 

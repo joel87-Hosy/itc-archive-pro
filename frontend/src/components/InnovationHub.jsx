@@ -7,6 +7,7 @@ import {
   Sparkles,
   Wifi,
   WifiOff,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -44,6 +45,18 @@ const iconMap = {
   "web-mobile": Smartphone,
 };
 
+const assistantSamples = [
+  "Que faut-il prioriser ?",
+  "Conseil pour la recherche",
+  "Mode cloud ou edge ?",
+];
+
+const searchSamples = [
+  "documents finance récents",
+  "archives RH",
+  "rapports Orange par date",
+];
+
 const getDocumentDate = (document) => {
   const value = document.uploadedAt || document.registeredAt;
   const parsed = value ? new Date(value) : null;
@@ -68,6 +81,7 @@ const InnovationHub = ({
   );
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(
     typeof window === "undefined" ? true : window.navigator.onLine,
   );
@@ -85,6 +99,24 @@ const InnovationHub = ({
       window.removeEventListener("offline", updateConnectionState);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAssistantOpen) {
+      return undefined;
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setIsAssistantOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isAssistantOpen]);
 
   useEffect(() => {
     let isMounted = true;
@@ -253,202 +285,152 @@ const InnovationHub = ({
   };
 
   return (
-    <section className="mb-10 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 text-white shadow-xl">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-cyan-100">
-            <Sparkles size={14} /> Transformation technologique
-          </p>
-          <h2 className="text-2xl font-black leading-tight">
-            Votre application est maintenant prête pour l’IA, le cloud-edge et
-            la convergence web/mobile
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm text-slate-200">
-            Cette couche d’innovation reste non bloquante : elle complète votre
-            portail documentaire sans casser le code existant.
-          </p>
-        </div>
+    <>
+      {isAssistantOpen && (
+        <button
+          type="button"
+          className="floating-ai-backdrop"
+          aria-label="Fermer le panneau IA"
+          onClick={() => setIsAssistantOpen(false)}
+        />
+      )}
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
-          <p className="font-bold text-white">Mode actuel</p>
-          <div className="mt-2 flex items-center gap-2 text-slate-200">
-            {isOnline ? <Wifi size={16} /> : <WifiOff size={16} />}
-            <span>{isOnline ? "Connecté" : "Hors ligne"}</span>
+      <div
+        className={`floating-ai-panel ${isAssistantOpen ? "open" : ""}`}
+        aria-hidden={!isAssistantOpen}
+      >
+        <div className="floating-ai-panel__header">
+          <div>
+            <p className="floating-ai-panel__eyebrow">Assistant IA</p>
+            <h3 className="floating-ai-panel__title">
+              Recherche et assistance intelligente
+            </h3>
           </div>
-          <p className="mt-1 text-xs text-cyan-100">{overview.syncStatus}</p>
+          <button
+            type="button"
+            className="floating-ai-panel__close"
+            aria-label="Fermer l'assistant IA"
+            onClick={() => setIsAssistantOpen(false)}
+          >
+            <X size={18} />
+          </button>
         </div>
-      </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-        {overview.capabilities.map((item) => {
-          const Icon = iconMap[item.id] || ShieldCheck;
-
-          return (
-            <article
-              key={item.id}
-              className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm"
-            >
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-cyan-100">
-                  <Icon size={18} />
-                  <span className="font-bold">{item.title}</span>
-                </div>
-                <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-200">
-                  {item.status}
-                </span>
+        <div className="floating-ai-panel__content">
+          <div className="rounded-2xl border border-emerald-400/20 bg-slate-950/45 p-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-100">
+                  Assistant IA métier
+                </p>
+                <h3 className="mt-1 text-lg font-black text-white">
+                  Posez une question sur vos archives
+                </h3>
               </div>
-              <p className="text-sm text-slate-200">{item.summary}</p>
-            </article>
-          );
-        })}
-      </div>
+              <div className="flex flex-wrap gap-2">
+                {assistantSamples.map((sample) => (
+                  <button
+                    key={sample}
+                    type="button"
+                    onClick={() => {
+                      setAssistantPrompt(sample);
+                      askAssistant(sample);
+                    }}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-100"
+                  >
+                    {sample}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-100">
-            Pilotage adaptatif
-          </p>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl bg-white/5 p-4">
-              <p className="text-xs text-slate-300">Rôle actif</p>
-              <p className="mt-1 text-lg font-black">{displayRole}</p>
-            </div>
-            <div className="rounded-2xl bg-white/5 p-4">
-              <p className="text-xs text-slate-300">Archives récentes</p>
-              <p className="mt-1 text-lg font-black">{recentDocumentsCount}</p>
-            </div>
-            <div className="rounded-2xl bg-white/5 p-4">
-              <p className="text-xs text-slate-300">Canal prioritaire</p>
-              <p className="mt-1 text-lg font-black">{deviceMode}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
-          <p className="mb-3 text-xs font-black uppercase tracking-[0.2em] text-cyan-100">
-            Suggestions de l’assistant
-          </p>
-          <div className="space-y-2">
-            {assistantSuggestions.map((suggestion) => (
-              <div
-                key={suggestion}
-                className="flex items-start gap-2 rounded-xl bg-slate-950/35 px-3 py-2 text-sm text-slate-100"
+            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
+              <textarea
+                value={assistantPrompt}
+                onChange={(event) => setAssistantPrompt(event.target.value)}
+                rows={3}
+                placeholder="Exemple : quels documents dois-je traiter en priorité cette semaine ?"
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
+              />
+              <button
+                type="button"
+                onClick={() => askAssistant(assistantPrompt)}
+                disabled={isGenerating}
+                className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <ArrowRight size={15} className="mt-0.5 text-cyan-200" />
-                <span>{suggestion}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="rounded-2xl border border-emerald-400/20 bg-slate-950/45 p-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-100">
-                Assistant IA métier
-              </p>
-              <h3 className="mt-1 text-lg font-black text-white">
-                Posez une question sur vos archives
-              </h3>
+                {isGenerating ? "Analyse..." : "Interroger l'assistant"}
+              </button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {[
-                "Que faut-il prioriser ?",
-                "Conseil pour la recherche",
-                "Mode cloud ou edge ?",
-              ].map((sample) => (
+
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-100">
+              {assistantReply}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-cyan-400/20 bg-slate-950/45 p-4">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-100">
+              Recherche IA avancée
+            </p>
+            <h3 className="mt-1 text-lg font-black text-white">
+              Cherchez en langage naturel
+            </h3>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {searchSamples.map((sampleQuery) => (
                 <button
-                  key={sample}
+                  key={sampleQuery}
                   type="button"
                   onClick={() => {
-                    setAssistantPrompt(sample);
-                    askAssistant(sample);
+                    setNaturalQuery(sampleQuery);
+                    runNaturalSearch(sampleQuery);
                   }}
                   className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-100"
                 >
-                  {sample}
+                  {sampleQuery}
                 </button>
               ))}
             </div>
-          </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
-            <textarea
-              value={assistantPrompt}
-              onChange={(event) => setAssistantPrompt(event.target.value)}
-              rows={3}
-              placeholder="Exemple : quels documents dois-je traiter en priorité cette semaine ?"
-              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
-            />
-            <button
-              type="button"
-              onClick={() => askAssistant(assistantPrompt)}
-              disabled={isGenerating}
-              className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isGenerating ? "Analyse..." : "Interroger l'assistant"}
-            </button>
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-100">
-            {assistantReply}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-cyan-400/20 bg-slate-950/45 p-4">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-100">
-            Recherche IA avancée
-          </p>
-          <h3 className="mt-1 text-lg font-black text-white">
-            Cherchez en langage naturel
-          </h3>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            {[
-              "documents finance récents",
-              "archives RH",
-              "rapports Orange par date",
-            ].map((sampleQuery) => (
+            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
+              <textarea
+                value={naturalQuery}
+                onChange={(event) => setNaturalQuery(event.target.value)}
+                rows={3}
+                placeholder="Exemple : montre-moi les documents finance les plus récents"
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
+              />
               <button
-                key={sampleQuery}
                 type="button"
-                onClick={() => {
-                  setNaturalQuery(sampleQuery);
-                  runNaturalSearch(sampleQuery);
-                }}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-100"
+                onClick={() => runNaturalSearch(naturalQuery)}
+                disabled={isSearching}
+                className="rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {sampleQuery}
+                {isSearching ? "Filtrage..." : "Appliquer la recherche"}
               </button>
-            ))}
-          </div>
+            </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
-            <textarea
-              value={naturalQuery}
-              onChange={(event) => setNaturalQuery(event.target.value)}
-              rows={3}
-              placeholder="Exemple : montre-moi les documents finance les plus récents"
-              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
-            />
-            <button
-              type="button"
-              onClick={() => runNaturalSearch(naturalQuery)}
-              disabled={isSearching}
-              className="rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSearching ? "Filtrage..." : "Appliquer la recherche"}
-            </button>
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-100">
-            {smartSearchMessage}
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-100">
+              {smartSearchMessage}
+            </div>
           </div>
         </div>
       </div>
-    </section>
+
+      <button
+        type="button"
+        className="floating-ai-launcher"
+        onClick={() => setIsAssistantOpen((current) => !current)}
+        aria-expanded={isAssistantOpen}
+        aria-label="Ouvrir l'assistant IA"
+      >
+        <span className="floating-ai-launcher__icon">
+          <Bot size={22} />
+        </span>
+        <span className="floating-ai-launcher__text">
+          {isAssistantOpen ? "Fermer l'IA" : "Ouvrir l'IA"}
+        </span>
+      </button>
+    </>
   );
 };
 
