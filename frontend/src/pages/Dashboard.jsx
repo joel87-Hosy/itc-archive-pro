@@ -28,6 +28,30 @@ import {
 // --- COMPOSANT : VISUALISEUR DE DOCUMENTS ---
 const DocumentViewer = ({ fileUrl, fileName, onClose }) => {
   if (!fileUrl) return null;
+
+  const normalizedFileName = (fileName || "").toLowerCase();
+  const extension = normalizedFileName.includes(".")
+    ? normalizedFileName.split(".").pop()
+    : "";
+  const officeExtensions = new Set([
+    "doc",
+    "docx",
+    "xls",
+    "xlsx",
+    "ppt",
+    "pptx",
+  ]);
+  const imageExtensions = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp"]);
+  const textExtensions = new Set(["txt", "csv", "json", "xml", "md"]);
+
+  const isOfficeDocument = officeExtensions.has(extension);
+  const canPreviewDirectly =
+    extension === "pdf" || imageExtensions.has(extension) || textExtensions.has(extension);
+
+  const viewerSrc = isOfficeDocument
+    ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`
+    : `${fileUrl}${extension === "pdf" ? "#toolbar=0" : ""}`;
+
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-5xl h-[90vh] rounded-xl flex flex-col overflow-hidden shadow-2xl">
@@ -59,11 +83,30 @@ const DocumentViewer = ({ fileUrl, fileName, onClose }) => {
           </div>
         </div>
         <div className="flex-1 bg-gray-100">
-          <iframe
-            src={`${fileUrl}#toolbar=0`}
-            className="w-full h-full border-none"
-            title="Aperçu"
-          ></iframe>
+          {isOfficeDocument || canPreviewDirectly ? (
+            <iframe
+              src={viewerSrc}
+              className="w-full h-full border-none"
+              title="Aperçu"
+            ></iframe>
+          ) : (
+            <div className="h-full w-full grid place-items-center p-6 text-center text-slate-600">
+              <div>
+                <p className="font-semibold">Aperçu intégré indisponible pour ce format.</p>
+                <p className="text-sm text-slate-500 mt-2">
+                  Ouvrez le document dans un nouvel onglet ou utilisez le bouton Télécharger.
+                </p>
+                <a
+                  href={fileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-slate-900 transition-colors"
+                >
+                  Ouvrir dans un nouvel onglet
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -210,7 +253,7 @@ const Dashboard = () => {
       }
     }
 
-    return "http://api.itc.ci";
+    return "https://api.itc.ci";
   };
 
   const buildDocumentFileUrl = (document) => {
