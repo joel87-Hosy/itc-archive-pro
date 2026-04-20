@@ -38,6 +38,7 @@ jobs:
         run: npm run build
         env:
           CI: "false"
+          REACT_APP_API_URL: ${{ vars.REACT_APP_API_URL }}
 
       - name: Prepare SPA fallback
         run: cp build/index.html build/404.html

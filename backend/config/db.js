@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const { Sequelize } = require("sequelize");
 const { sqliteFilePath } = require("./storagePaths");
 
@@ -11,6 +13,14 @@ const {
 } = process.env;
 
 const hasExternalDatabase = Boolean(DATABASE_URL);
+
+if (!hasExternalDatabase) {
+  const sqliteDirectory = path.dirname(sqliteFilePath);
+
+  if (!fs.existsSync(sqliteDirectory)) {
+    fs.mkdirSync(sqliteDirectory, { recursive: true });
+  }
+}
 
 const sequelize = hasExternalDatabase
   ? new Sequelize(DATABASE_URL, {

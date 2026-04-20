@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: itc-archive-pro-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_ORIGIN
+        value: https://joel87-hosy.github.io
+      - key: DATA_DIR
+        value: /var/data
+      - key: SQLITE_STORAGE_PATH
+        value: /var/data/itc_archive.sqlite
+      - key: UPLOADS_DIR
+        value: /var/data/uploads
+    healthCheckPath: /
+    disk:
+      name: itc-archive-pro-disk
+      mountPath: /var/data
+      sizeGB: 1
