@@ -6,6 +6,7 @@ const rateLimit = require("express-rate-limit");
 const archiveRoutes = require("./routes/archiveRoutes");
 const userRoutes = require("./routes/userRoutes");
 const { initUserStore } = require("./services/userStore");
+const { uploadsDirectory } = require("./config/storagePaths");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -190,7 +191,7 @@ app.use("/api", apiLimiter);
 app.use("/api/users/login", authLimiter);
 app.use(
   "/uploads",
-  express.static("uploads", {
+  express.static(uploadsDirectory, {
     index: false,
     fallthrough: false,
   }),
