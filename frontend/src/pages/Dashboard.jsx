@@ -271,6 +271,47 @@ const Dashboard = () => {
     return `${backendBaseUrl}/uploads/doc_${document.id}.pdf`;
   };
 
+  const getDocumentMergeKey = (document = {}) => {
+    const reference = String(document.reference || "").trim().toLowerCase();
+
+    if (reference) {
+      return `ref:${reference}`;
+    }
+
+    const normalizedFilePath = String(document.filePath || "")
+      .replace(/\\/g, "/")
+      .trim()
+      .toLowerCase();
+    const normalizedFileName = String(document.fileName || "")
+      .trim()
+      .toLowerCase();
+    const timestamp = String(
+      document.uploadedAt || document.registeredAt || document.id || "",
+    )
+      .trim()
+      .toLowerCase();
+
+    return `fallback:${normalizedFilePath || normalizedFileName}:${timestamp}`;
+  };
+
+  const mergeDocumentArchives = (localArchives = [], serverArchives = []) => {
+    const mergedByKey = new Map();
+
+    serverArchives.forEach((document) => {
+      mergedByKey.set(getDocumentMergeKey(document), document);
+    });
+
+    localArchives.forEach((document) => {
+      const key = getDocumentMergeKey(document);
+
+      if (!mergedByKey.has(key)) {
+        mergedByKey.set(key, document);
+      }
+    });
+
+    return Array.from(mergedByKey.values());
+  };
+
   const loadDocuments = async () => {
     const localArchives = getLocalArchives();
     setDocumentsData(localArchives);
@@ -305,7 +346,8 @@ const Dashboard = () => {
         throw new Error("Format de réponse invalide pour les documents.");
       }
 
-      saveLocalArchives(result.data);
+      const mergedArchives = mergeDocumentArchives(localArchives, result.data);
+      saveLocalArchives(mergedArchives);
       setDocumentMessage("");
     } catch (error) {
       setDocumentMessage(
@@ -517,7 +559,10 @@ const Dashboard = () => {
       }
     }
 
-    const nextDocuments = documentsData.filter((item) => item.id !== document.id);
+    const nextDocuments = documentsData.filter(
+      (item) =>
+        item.id !== document.id && item.reference !== document.reference,
+    );
     saveLocalArchives(nextDocuments);
     setDocumentMessage(
       `Le document "${document.fileName}" a été supprimé${backendMessage}.`,
