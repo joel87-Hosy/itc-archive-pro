@@ -2,6 +2,7 @@
 import { Eye, EyeOff, Lock, Mail, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { buildApiUrl } from "../utils/api";
 import { authenticateHostedUser } from "../utils/hostedAuth";
 
 const Login = () => {
@@ -62,7 +63,7 @@ const Login = () => {
       }
 
       try {
-        const response = await fetch("/api/users/login", {
+        const response = await fetch(buildApiUrl("/api/users/login"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

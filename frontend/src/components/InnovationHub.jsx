@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { buildApiUrl } from "../utils/api";
 
 const fallbackOverview = {
   deploymentMode: "edge-ready",
@@ -123,7 +124,7 @@ const InnovationHub = ({
 
     const loadOverview = async () => {
       try {
-        const response = await fetch("/api/innovation/overview");
+        const response = await fetch(buildApiUrl("/api/innovation/overview"));
         const result = await response.json();
 
         if (isMounted && response.ok && result?.data) {
@@ -206,7 +207,7 @@ const InnovationHub = ({
     setIsGenerating(true);
 
     try {
-      const response = await fetch("/api/innovation/assistant", {
+      const response = await fetch(buildApiUrl("/api/innovation/assistant"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -253,7 +254,7 @@ const InnovationHub = ({
     setIsSearching(true);
 
     try {
-      const response = await fetch("/api/innovation/natural-search", {
+      const response = await fetch(buildApiUrl("/api/innovation/natural-search"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

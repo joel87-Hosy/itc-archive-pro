@@ -17,6 +17,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import InnovationHub from "../components/InnovationHub";
+import { buildApiUrl, getApiBaseUrl } from "../utils/api";
 import { exportArchivesToExcel } from "../utils/exportArchives";
 import {
   createHostedAccount,
@@ -207,7 +208,7 @@ const Dashboard = () => {
     setIsAccountsLoading(true);
 
     try {
-      const response = await fetch("/api/users", {
+      const response = await fetch(buildApiUrl("/api/users"), {
         headers: getAuthHeaders(false),
       });
       const rawResult = await response.text();
@@ -238,26 +239,8 @@ const Dashboard = () => {
     }
   };
 
-  const getBackendBaseUrl = () => {
-    const configuredBaseUrl = process.env.REACT_APP_API_URL?.trim();
-
-    if (configuredBaseUrl) {
-      return configuredBaseUrl.replace(/\/+$/, "");
-    }
-
-    if (typeof window !== "undefined") {
-      const { protocol, hostname } = window.location;
-
-      if (hostname === "localhost" || hostname === "127.0.0.1") {
-        return `${protocol}//${hostname}:5000`;
-      }
-    }
-
-    return "https://api.itc.ci";
-  };
-
   const buildDocumentFileUrl = (document) => {
-    const backendBaseUrl = getBackendBaseUrl();
+    const backendBaseUrl = getApiBaseUrl();
 
     if (document.filePath) {
       const normalizedPath = String(document.filePath).replace(/\\/g, "/");
@@ -323,7 +306,7 @@ const Dashboard = () => {
     }
 
     try {
-      const response = await fetch("/api/archives", {
+      const response = await fetch(buildApiUrl("/api/archives"), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -437,7 +420,7 @@ const Dashboard = () => {
         payload.append("retentionYears", "5");
         payload.append("file", uploadForm.file);
 
-        const response = await fetch("/api/archives/upload", {
+        const response = await fetch(buildApiUrl("/api/archives/upload"), {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -526,7 +509,7 @@ const Dashboard = () => {
 
     if (token) {
       try {
-        const response = await fetch(`/api/archives/${document.id}`, {
+        const response = await fetch(buildApiUrl(`/api/archives/${document.id}`), {
           method: "DELETE",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -645,7 +628,7 @@ const Dashboard = () => {
     }
 
     try {
-      const response = await fetch("/api/users", {
+      const response = await fetch(buildApiUrl("/api/users"), {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify(accountForm),
@@ -701,7 +684,7 @@ const Dashboard = () => {
     }
 
     try {
-      const response = await fetch(`/api/users/${selectedAccountId}`, {
+      const response = await fetch(buildApiUrl(`/api/users/${selectedAccountId}`), {
         method: "PUT",
         headers: getAuthHeaders(),
         body: JSON.stringify(accountForm),
@@ -748,7 +731,7 @@ const Dashboard = () => {
     }
 
     try {
-      const response = await fetch(`/api/users/${targetAccountId}`, {
+      const response = await fetch(buildApiUrl(`/api/users/${targetAccountId}`), {
         method: "DELETE",
         headers: getAuthHeaders(false),
       });
