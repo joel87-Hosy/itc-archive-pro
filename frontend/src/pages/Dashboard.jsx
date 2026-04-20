@@ -195,17 +195,37 @@ const Dashboard = () => {
     }
   };
 
+  const getBackendBaseUrl = () => {
+    const configuredBaseUrl = process.env.REACT_APP_API_URL?.trim();
+
+    if (configuredBaseUrl) {
+      return configuredBaseUrl.replace(/\/+$/, "");
+    }
+
+    if (typeof window !== "undefined") {
+      const { protocol, hostname } = window.location;
+
+      if (hostname === "localhost" || hostname === "127.0.0.1") {
+        return `${protocol}//${hostname}:5000`;
+      }
+    }
+
+    return "http://api.itc.ci";
+  };
+
   const buildDocumentFileUrl = (document) => {
+    const backendBaseUrl = getBackendBaseUrl();
+
     if (document.filePath) {
       const normalizedPath = String(document.filePath).replace(/\\/g, "/");
       const fileName = normalizedPath.split("/").pop();
 
       if (fileName) {
-        return `/uploads/${fileName}`;
+        return `${backendBaseUrl}/uploads/${encodeURIComponent(fileName)}`;
       }
     }
 
-    return `http://api.itc.ci/uploads/doc_${document.id}.pdf`;
+    return `${backendBaseUrl}/uploads/doc_${document.id}.pdf`;
   };
 
   const loadDocuments = async () => {
