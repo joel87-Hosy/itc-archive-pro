@@ -25,6 +25,8 @@ import {
   getHostedAccounts,
   updateHostedAccount,
 } from "../utils/hostedAuth";
+import { db } from "../firebase";
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
 
 // --- COMPOSANT : VISUALISEUR DE DOCUMENTS ---
 const DocumentViewer = ({ fileUrl, fileName, onClose }) => {

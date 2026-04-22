@@ -1,11 +1,9 @@
-// frontend/src/pages/Login.jsx
-import { Eye, EyeOff, Lock, Mail, Moon, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase";
+import { Eye, EyeOff, Lock, Mail, Moon, Sun } from "lucide-react";
 
-const Login = () => {
+export default function FirebaseLogin({ onLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,9 +12,8 @@ const Login = () => {
   const [theme, setTheme] = useState(
     () =>
       (typeof window !== "undefined" && localStorage.getItem("itc_theme")) ||
-      "light",
+      "light"
   );
-  const navigate = useNavigate();
   const logoSrc = `${process.env.PUBLIC_URL}/itc-logo.jpg`;
   const coverImageUrl = `${process.env.PUBLIC_URL}/image-couverture.png`;
 
@@ -34,7 +31,29 @@ const Login = () => {
     localStorage.setItem("itc_theme", theme);
   }, [theme]);
 
-  const handleSubmit = async (e) => {
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError("");
+    setIsSubmitting(true);
+
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!normalizedEmail || !password.trim()) {
+        throw new Error("Veuillez renseigner votre email et votre mot de passe.");
+      }
+      const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      if (onLogin) onLogin(userCredential.user); // <-- Notifie App.js
+    } catch (error) {
+      setLoginError(
+        error.message ||
+        "Connexion impossible pour le moment. Vérifiez le service utilisateur."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRegister = async (e) => {
     e.preventDefault();
     setLoginError("");
     setIsSubmitting(true);
@@ -43,26 +62,21 @@ const Login = () => {
       const normalizedEmail = email.trim().toLowerCase();
 
       if (!normalizedEmail || !password.trim()) {
-        throw new Error("Veuillez renseigner votre email et votre mot de passe.");
+        throw new Error(
+          "Veuillez renseigner votre email et votre mot de passe."
+        );
       }
 
-      // Authentification Firebase
-      const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
-      const firebaseUser = userCredential.user;
+      // Inscription Firebase
+      await createUserWithEmailAndPassword(auth, normalizedEmail, password);
 
-      // Stocker le token pour que PrivateRoute fonctionne
-      const token = await firebaseUser.getIdToken();
-      localStorage.setItem("itc_token", token);
+      // Optionnel : tu peux stocker l'email pour la prochaine fois
       localStorage.setItem("itc_last_email", normalizedEmail);
-      localStorage.setItem("user_name", firebaseUser.displayName || normalizedEmail);
-      localStorage.setItem("user_role", "Archiviste");
-      localStorage.setItem("user_department", "Département Technique");
-
-      // Rediriger vers le dashboard
-      navigate("/dashboard");
-
     } catch (error) {
-      setLoginError("Identifiants invalides. Vérifiez votre email et mot de passe.");
+      setLoginError(
+        error.message ||
+        "Inscription impossible pour le moment. Vérifiez le service utilisateur."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -106,7 +120,7 @@ const Login = () => {
           </p>
           <h2 className="text-3xl font-black text-slate-900 login-intro-title">
             Gouvernez votre patrimoine documentaire avec une
-            <span className="login-gradient-text"> expérience enterprise </span>
+            <span className="login-gradient-text">expérience enterprise</span>
             de niveau international
           </h2>
           <p className="text-slate-500 mt-2 font-medium login-intro-copy">
@@ -136,7 +150,7 @@ const Login = () => {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form space-y-6 ui-reveal">
+        <form onSubmit={handleLogin} className="login-form space-y-6 ui-reveal">
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">
               Email Professionnel
@@ -278,6 +292,4 @@ const Login = () => {
       </div>
     </div>
   );
-};
-
-export default Login;
+}
