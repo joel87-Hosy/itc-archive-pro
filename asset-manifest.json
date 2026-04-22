@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/itc-archive-pro/static/css/main.c54d8c18.css",
-    "main.js": "/itc-archive-pro/static/js/main.56f08baa.js",
+    "main.js": "/itc-archive-pro/static/js/main.dab6e094.js",
     "index.html": "/itc-archive-pro/index.html",
     "main.c54d8c18.css.map": "/itc-archive-pro/static/css/main.c54d8c18.css.map",
-    "main.56f08baa.js.map": "/itc-archive-pro/static/js/main.56f08baa.js.map"
+    "main.dab6e094.js.map": "/itc-archive-pro/static/js/main.dab6e094.js.map"
   },
   "entrypoints": [
     "static/css/main.c54d8c18.css",
-    "static/js/main.56f08baa.js"
+    "static/js/main.dab6e094.js"
   ]
 }
