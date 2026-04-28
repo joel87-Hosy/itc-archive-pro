@@ -1,16 +1,14 @@
 import {
-  ArrowRight,
   Bot,
+  Brain,
   Cloud,
-  ShieldCheck,
+  Search,
   Smartphone,
   Sparkles,
-  Wifi,
-  WifiOff,
   X,
+  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { buildApiUrl } from "../utils/api";
 
 const fallbackOverview = {
   deploymentMode: "edge-ready",
@@ -34,7 +32,7 @@ const fallbackOverview = {
       id: "web-mobile",
       title: "Web & Mobile",
       summary:
-        "L’interface conserve une expérience responsive, adaptée au bureau comme au mobile.",
+        "L'interface conserve une expérience responsive, adaptée au bureau comme au mobile.",
       status: "Convergé",
     },
   ],
@@ -91,10 +89,8 @@ const InnovationHub = ({
     const updateConnectionState = () => {
       setIsOnline(window.navigator.onLine);
     };
-
     window.addEventListener("online", updateConnectionState);
     window.addEventListener("offline", updateConnectionState);
-
     return () => {
       window.removeEventListener("online", updateConnectionState);
       window.removeEventListener("offline", updateConnectionState);
@@ -102,77 +98,36 @@ const InnovationHub = ({
   }, []);
 
   useEffect(() => {
-    if (!isAssistantOpen) {
-      return undefined;
-    }
-
+    if (!isAssistantOpen) return undefined;
     const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        setIsAssistantOpen(false);
-      }
+      if (event.key === "Escape") setIsAssistantOpen(false);
     };
-
     window.addEventListener("keydown", handleEscape);
-
-    return () => {
-      window.removeEventListener("keydown", handleEscape);
-    };
+    return () => window.removeEventListener("keydown", handleEscape);
   }, [isAssistantOpen]);
 
+  // Suppression de l'appel API - on utilise directement fallbackOverview
   useEffect(() => {
-    let isMounted = true;
-
-    const loadOverview = async () => {
-      try {
-        const response = await fetch(buildApiUrl("/api/innovation/overview"));
-        const result = await response.json();
-
-        if (isMounted && response.ok && result?.data) {
-          setOverview(result.data);
-        }
-      } catch {
-        if (isMounted) {
-          setOverview(fallbackOverview);
-        }
-      }
-    };
-
-    loadOverview();
-
-    return () => {
-      isMounted = false;
-    };
+    setOverview(fallbackOverview);
   }, []);
 
   const dominantCategory = useMemo(() => {
-    if (!documentsData.length) {
-      return "Archives générales";
-    }
-
+    if (!documentsData.length) return "Archives générales";
     const counts = documentsData.reduce((accumulator, document) => {
-      accumulator[document.category] =
-        (accumulator[document.category] || 0) + 1;
+      accumulator[document.category] = (accumulator[document.category] || 0) + 1;
       return accumulator;
     }, {});
-
-    return (
-      Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
-      "Archives générales"
-    );
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Archives générales";
   }, [documentsData]);
 
   const recentDocumentsCount = useMemo(() => {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
     return documentsData.filter((document) => {
       const documentDate = getDocumentDate(document);
       return documentDate && documentDate >= sevenDaysAgo;
     }).length;
   }, [documentsData]);
-
-  const deviceMode =
-    typeof window !== "undefined" && window.innerWidth < 768 ? "Mobile" : "Web";
 
   const assistantSuggestions = useMemo(() => {
     const suggestions = [
@@ -184,105 +139,46 @@ const InnovationHub = ({
         ? `${accounts.length} compte(s) sont déjà prêts pour un pilotage collaboratif multi-écrans.`
         : "Ajoutez des comptes pour activer une collaboration plus fluide sur web et mobile.",
     ];
-
     if (searchTerm.trim()) {
       suggestions.unshift(
-        `Suggestion GenAI : enrichir la recherche autour de “${searchTerm.trim()}” avec des filtres métiers.`,
+        `Suggestion GenAI : enrichir la recherche autour de "${searchTerm.trim()}" avec des filtres métiers.`,
       );
     }
-
     return suggestions.slice(0, 4);
   }, [accounts.length, dominantCategory, isOnline, searchTerm]);
 
+  // Assistant IA local (sans API)
   const askAssistant = async (prompt) => {
     const cleanPrompt = prompt.trim();
-
     if (!cleanPrompt) {
-      setAssistantReply(
-        "Saisissez une question métier, par exemple sur la recherche, la priorité documentaire ou le mode cloud/mobile.",
-      );
+      setAssistantReply("Saisissez une question métier, par exemple sur la recherche, la priorité documentaire ou le mode cloud/mobile.");
       return;
     }
-
     setIsGenerating(true);
-
-    try {
-      const response = await fetch(buildApiUrl("/api/innovation/assistant"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: cleanPrompt,
-          context: {
-            documentsCount: documentsData.length,
-            recentDocumentsCount,
-            accountsCount: accounts.length,
-            dominantCategory,
-            role: displayRole,
-            isOnline,
-          },
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok || !result?.data?.reply) {
-        throw new Error("Réponse indisponible");
-      }
-
-      setAssistantReply(result.data.reply);
-    } catch {
-      setAssistantReply(
-        `Vue métier : ${documentsData.length} document(s) suivis, ${recentDocumentsCount} récent(s), catégorie dominante ${dominantCategory}.`,
-      );
-    } finally {
-      setIsGenerating(false);
-    }
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    setAssistantReply(
+      `Vue métier : ${documentsData.length} document(s) suivis, ${recentDocumentsCount} récent(s), catégorie dominante "${dominantCategory}". Conseil : priorisez les documents récents de la catégorie ${dominantCategory}.`,
+    );
+    setIsGenerating(false);
   };
 
+  // Recherche naturelle locale (sans API)
   const runNaturalSearch = async (query) => {
     const cleanQuery = query.trim();
-
     if (!cleanQuery) {
-      setSmartSearchMessage(
-        "Saisissez une demande comme finance récente, documents RH ou rapports Orange.",
-      );
+      setSmartSearchMessage("Saisissez une demande comme finance récente, documents RH ou rapports Orange.");
       return;
     }
-
     setIsSearching(true);
-
-    try {
-      const response = await fetch(buildApiUrl("/api/innovation/natural-search"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ query: cleanQuery }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok || !result?.data) {
-        throw new Error("Recherche indisponible");
-      }
-
-      onApplySmartSearch(result.data);
-      setSmartSearchMessage(result.data.explanation);
-    } catch {
-      const fallbackSearch = cleanQuery.split(" ")[0] || "";
-      onApplySmartSearch({
-        category: "Tous",
-        searchTerm: fallbackSearch,
-        sortOption: "date",
-      });
-      setSmartSearchMessage(
-        `Recherche rapide appliquée avec le mot-clé ${fallbackSearch || "général"}.`,
-      );
-    } finally {
-      setIsSearching(false);
-    }
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    const fallbackSearch = cleanQuery.split(" ")[0] || "";
+    onApplySmartSearch({
+      category: "Tous",
+      searchTerm: fallbackSearch,
+      sortOption: "date",
+    });
+    setSmartSearchMessage(`Recherche rapide appliquée avec le mot-clé "${fallbackSearch || "général"}".`);
+    setIsSearching(false);
   };
 
   return (
@@ -300,136 +196,175 @@ const InnovationHub = ({
         className={`floating-ai-panel ${isAssistantOpen ? "open" : ""}`}
         aria-hidden={!isAssistantOpen}
       >
+        {/* Aurora border glow */}
+        <div className="floating-ai-panel__aurora" aria-hidden="true" />
+
         <div className="floating-ai-panel__header">
-          <div>
-            <p className="floating-ai-panel__eyebrow">Assistant IA</p>
-            <h3 className="floating-ai-panel__title">
-              Recherche et assistance intelligente
-            </h3>
+          <div className="floating-ai-panel__header-left">
+            <span className="floating-ai-panel__brain-icon">
+              <Brain size={16} />
+            </span>
+            <div>
+              <p className="floating-ai-panel__eyebrow">
+                <Sparkles size={10} style={{ display: "inline", marginRight: "4px", verticalAlign: "middle" }} />
+                Intelligence Artificielle
+              </p>
+              <h3 className="floating-ai-panel__title">
+                Assistant & Recherche intelligente
+              </h3>
+            </div>
           </div>
-          <button
-            type="button"
-            className="floating-ai-panel__close"
-            aria-label="Fermer l'assistant IA"
-            onClick={() => setIsAssistantOpen(false)}
-          >
-            <X size={18} />
-          </button>
+          <div className="floating-ai-panel__header-right">
+            <span className={`floating-ai-status-dot ${isOnline ? "online" : "offline"}`} title={isOnline ? "En ligne" : "Hors-ligne"} />
+            <button
+              type="button"
+              className="floating-ai-panel__close"
+              aria-label="Fermer l'assistant IA"
+              onClick={() => setIsAssistantOpen(false)}
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         <div className="floating-ai-panel__content">
-          <div className="rounded-2xl border border-emerald-400/20 bg-slate-950/45 p-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-100">
-                  Assistant IA métier
-                </p>
-                <h3 className="mt-1 text-lg font-black text-white">
-                  Posez une question sur vos archives
-                </h3>
+
+          {/* Assistant IA */}
+          <div className="ai-card ai-card--emerald">
+            <div className="ai-card__header">
+              <div className="ai-card__icon-wrap ai-card__icon-wrap--emerald">
+                <Bot size={15} />
               </div>
-              <div className="flex flex-wrap gap-2">
-                {assistantSamples.map((sample) => (
-                  <button
-                    key={sample}
-                    type="button"
-                    onClick={() => {
-                      setAssistantPrompt(sample);
-                      askAssistant(sample);
-                    }}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-100"
-                  >
-                    {sample}
-                  </button>
-                ))}
+              <div>
+                <p className="ai-card__label">Assistant IA métier</p>
+                <h4 className="ai-card__title">Posez une question sur vos archives</h4>
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
+            <div className="ai-chips">
+              {assistantSamples.map((sample) => (
+                <button
+                  key={sample}
+                  type="button"
+                  onClick={() => { setAssistantPrompt(sample); askAssistant(sample); }}
+                  className="ai-chip ai-chip--emerald"
+                >
+                  <Zap size={10} />
+                  {sample}
+                </button>
+              ))}
+            </div>
+
+            <div className="ai-input-row">
               <textarea
                 value={assistantPrompt}
                 onChange={(event) => setAssistantPrompt(event.target.value)}
                 rows={3}
-                placeholder="Exemple : quels documents dois-je traiter en priorité cette semaine ?"
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
+                placeholder="Quels documents dois-je traiter en priorité cette semaine ?"
+                className="ai-textarea ai-textarea--emerald"
               />
               <button
                 type="button"
                 onClick={() => askAssistant(assistantPrompt)}
                 disabled={isGenerating}
-                className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                className="ai-btn ai-btn--emerald"
               >
-                {isGenerating ? "Analyse..." : "Interroger l'assistant"}
+                {isGenerating ? (
+                  <span className="ai-typing-dots">
+                    <span /><span /><span />
+                  </span>
+                ) : (
+                  <>
+                    <Brain size={14} />
+                    Analyser
+                  </>
+                )}
               </button>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-100">
-              {assistantReply}
+            <div className="ai-reply ai-reply--emerald">
+              <span className="ai-reply__icon"><Bot size={13} /></span>
+              <p className="ai-reply__text">{assistantReply}</p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-cyan-400/20 bg-slate-950/45 p-4">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-100">
-              Recherche IA avancée
-            </p>
-            <h3 className="mt-1 text-lg font-black text-white">
-              Cherchez en langage naturel
-            </h3>
+          {/* Recherche naturelle */}
+          <div className="ai-card ai-card--cyan">
+            <div className="ai-card__header">
+              <div className="ai-card__icon-wrap ai-card__icon-wrap--cyan">
+                <Search size={15} />
+              </div>
+              <div>
+                <p className="ai-card__label">Recherche IA avancée</p>
+                <h4 className="ai-card__title">Cherchez en langage naturel</h4>
+              </div>
+            </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="ai-chips">
               {searchSamples.map((sampleQuery) => (
                 <button
                   key={sampleQuery}
                   type="button"
-                  onClick={() => {
-                    setNaturalQuery(sampleQuery);
-                    runNaturalSearch(sampleQuery);
-                  }}
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-100"
+                  onClick={() => { setNaturalQuery(sampleQuery); runNaturalSearch(sampleQuery); }}
+                  className="ai-chip ai-chip--cyan"
                 >
+                  <Search size={10} />
                   {sampleQuery}
                 </button>
               ))}
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
+            <div className="ai-input-row">
               <textarea
                 value={naturalQuery}
                 onChange={(event) => setNaturalQuery(event.target.value)}
                 rows={3}
-                placeholder="Exemple : montre-moi les documents finance les plus récents"
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
+                placeholder="Montre-moi les documents finance les plus récents…"
+                className="ai-textarea ai-textarea--cyan"
               />
               <button
                 type="button"
                 onClick={() => runNaturalSearch(naturalQuery)}
                 disabled={isSearching}
-                className="rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+                className="ai-btn ai-btn--cyan"
               >
-                {isSearching ? "Filtrage..." : "Appliquer la recherche"}
+                {isSearching ? (
+                  <span className="ai-typing-dots">
+                    <span /><span /><span />
+                  </span>
+                ) : (
+                  <>
+                    <Search size={14} />
+                    Rechercher
+                  </>
+                )}
               </button>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-100">
-              {smartSearchMessage}
+            <div className="ai-reply ai-reply--cyan">
+              <span className="ai-reply__icon"><Sparkles size={13} /></span>
+              <p className="ai-reply__text">{smartSearchMessage}</p>
             </div>
           </div>
+
         </div>
       </div>
 
       <button
         type="button"
-        className="floating-ai-launcher"
+        className={`floating-ai-launcher ${isAssistantOpen ? "active" : ""}`}
         onClick={() => setIsAssistantOpen((current) => !current)}
         aria-expanded={isAssistantOpen}
-        aria-label="Ouvrir l'assistant IA"
+        aria-label={isAssistantOpen ? "Fermer l'assistant IA" : "Ouvrir l'assistant IA"}
       >
+        <span className="floating-ai-launcher__pulse" aria-hidden="true" />
         <span className="floating-ai-launcher__icon">
-          <Bot size={22} />
+          {isAssistantOpen ? <X size={17} /> : <Bot size={17} />}
         </span>
         <span className="floating-ai-launcher__text">
-          {isAssistantOpen ? "Fermer l'IA" : "Ouvrir l'IA"}
+          {isAssistantOpen ? "Fermer l'IA" : "Assistant IA"}
         </span>
+        <span className="floating-ai-launcher__badge" aria-hidden="true" />
       </button>
     </>
   );
