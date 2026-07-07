@@ -3,7 +3,9 @@ import { Eye, EyeOff, Lock, Mail, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { getHostedAccounts } from "../utils/hostedAuth";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -52,11 +54,46 @@ const Login = () => {
 
       // Stocker le token pour que PrivateRoute fonctionne
       const token = await firebaseUser.getIdToken();
+
+      // Récupérer le rôle depuis Firestore (source de vérité)
+      let userRole = "Archiviste";
+      let userDepartment = "Département Technique";
+      let userName = firebaseUser.displayName || normalizedEmail;
+
+      try {
+        const q = query(collection(db, "users"), where("email", "==", normalizedEmail));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const userDoc = snapshot.docs[0].data();
+          userRole = userDoc.role || userRole;
+          userDepartment = userDoc.department || userDepartment;
+          userName = userDoc.name || userName;
+        } else {
+          // Fallback : chercher dans localStorage si Firestore n'a pas ce profil
+          const hostedAccounts = await getHostedAccounts();
+          const matched = hostedAccounts.find(acc => acc.email?.toLowerCase() === normalizedEmail);
+          if (matched) {
+            userRole = matched.role || userRole;
+            userDepartment = matched.department || userDepartment;
+            userName = matched.name || userName;
+          }
+        }
+      } catch {
+        // Firestore inaccessible : fallback localStorage
+        const hostedAccounts = await getHostedAccounts();
+        const matched = hostedAccounts.find(acc => acc.email?.toLowerCase() === normalizedEmail);
+        if (matched) {
+          userRole = matched.role || userRole;
+          userDepartment = matched.department || userDepartment;
+          userName = matched.name || userName;
+        }
+      }
+
       localStorage.setItem("itc_token", token);
       localStorage.setItem("itc_last_email", normalizedEmail);
-      localStorage.setItem("user_name", firebaseUser.displayName || normalizedEmail);
-      localStorage.setItem("user_role", "Archiviste");
-      localStorage.setItem("user_department", "Département Technique");
+      localStorage.setItem("user_name", userName);
+      localStorage.setItem("user_role", userRole);
+      localStorage.setItem("user_department", userDepartment);
 
       // Rediriger vers le dashboard
       navigate("/dashboard");

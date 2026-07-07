@@ -4,7 +4,7 @@ import { getAnalytics } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore"; // Ajout
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyB8zWASRK5hbrYmwlrVjqL4LU4w3QZrWno",
   authDomain: "archive-itc.firebaseapp.com",
   projectId: "archive-itc",

@@ -14,28 +14,38 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import InnovationHub from "../components/InnovationHub";
 import { exportArchivesToExcel } from "../utils/exportArchives";
-import {
-  createHostedAccount,
-  deleteHostedAccount,
-  getHostedAccounts,
-  updateHostedAccount,
-} from "../utils/hostedAuth";
-import { db, storage } from "../firebase";
+import { db, storage, firebaseConfig } from "../firebase";
 import {
   collection,
   getDocs,
   addDoc,
   deleteDoc,
+  updateDoc,
   doc,
   orderBy,
   query,
   serverTimestamp,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { initializeApp, getApp } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+
+// Instance Firebase secondaire pour créer des comptes sans déconnecter l'admin
+let _secondaryAuth;
+const getSecondaryAuth = () => {
+  if (_secondaryAuth) return _secondaryAuth;
+  try {
+    const secondaryApp = initializeApp(firebaseConfig, "Secondary");
+    _secondaryAuth = getAuth(secondaryApp);
+  } catch {
+    _secondaryAuth = getAuth(getApp("Secondary"));
+  }
+  return _secondaryAuth;
+};
 
 // --- COMPOSANT : VISUALISEUR DE DOCUMENTS ---
 const DocumentViewer = ({ fileUrl, fileName, onClose }) => {
@@ -181,7 +191,7 @@ const Dashboard = () => {
     }
   };
 
-  // ─── FIREBASE : Charger les comptes depuis Firestore ─────────────────────
+  // ─── Charger les comptes depuis Firestore ─────────────────────────────────
   const loadAccounts = async () => {
     setIsAccountsLoading(true);
     try {
@@ -189,14 +199,8 @@ const Dashboard = () => {
       const users = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
       setAccounts(users);
       setAccountMessage("");
-    } catch (error) {
-      const hostedAccounts = await getHostedAccounts();
-      setAccounts(hostedAccounts);
-      setAccountMessage(
-        hostedAccounts.length > 0
-          ? "Mode hébergé actif : comptes sécurisés disponibles sur ce navigateur."
-          : "Le service des comptes est momentanément indisponible."
-      );
+    } catch {
+      setAccountMessage("Impossible de charger les comptes.");
     } finally {
       setIsAccountsLoading(false);
     }
@@ -251,7 +255,7 @@ const Dashboard = () => {
     setUploadMessage("");
   };
 
-  // ─── FALLBACK : Sauvegarder sans Firebase Storage ──────────────────────────
+  // ─── FIREBASE : Verser un document vers Firebase Storage ─────────────────
   const handleSaveDocument = async () => {
     if (!uploadForm.title || !uploadForm.category) {
       setUploadMessage("Veuillez renseigner le titre et la catégorie.");
@@ -269,25 +273,40 @@ const Dashboard = () => {
     try {
       setUploadMessage("Téléversement en cours...");
 
-      // Convertir le fichier en base64
-      const fileUrl = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(uploadForm.file);
-      });
+      // Upload du fichier vers Firebase Storage
+      const storagePath = `archives/${Date.now()}_${uploadForm.file.name}`;
+      const storageRef = ref(storage, storagePath);
+      const snapshot = await uploadBytes(storageRef, uploadForm.file);
+      const fileUrl = await getDownloadURL(snapshot.ref);
 
-      // Sauvegarde dans Firestore avec le fichier en base64
-      await addDoc(collection(db, "archives"), {
+      // Sauvegarde des métadonnées dans Firestore (URL Storage, pas base64)
+      const docRef = await addDoc(collection(db, "archives"), {
         title: uploadForm.title.trim(),
         reference: generatedReference,
         category: uploadForm.category,
         fileName: uploadForm.file.name,
-        fileUrl, // data URL base64
+        fileUrl,
+        storagePath,
         createdAt: serverTimestamp(),
       });
 
-      await loadDocuments();
+      // Mise à jour optimiste : ajouter localement sans refetch Firestore
+      const nowDate = new Date().toISOString();
+      setDocumentsData((prev) => [
+        {
+          id: docRef.id,
+          title: uploadForm.title.trim(),
+          reference: generatedReference,
+          category: uploadForm.category,
+          fileName: uploadForm.file.name,
+          fileUrl,
+          storagePath,
+          uploadedAt: nowDate,
+          registeredAt: nowDate.slice(0, 10),
+        },
+        ...prev,
+      ]);
+
       setUploadForm({ title: "", reference: "", category: "", fileName: "", file: null });
       setUploadMessage("Document versé avec succès.");
       setShowUploadForm(false);
@@ -307,24 +326,26 @@ const Dashboard = () => {
     );
     if (!hasConfirmed) return;
 
+    // Mise à jour optimiste : retirer de l'état local immédiatement
+    setDocumentsData((prev) => prev.filter((d) => d.id !== document.id));
+    setDocumentMessage(`Le document "${document.fileName}" a été supprimé.`);
+
     try {
       // Supprimer de Firestore
       await deleteDoc(doc(db, "archives", document.id));
 
-      // Supprimer du Storage si possible
-      if (document.fileUrl) {
-        try {
-          const storageRef = ref(storage, document.fileUrl);
-          await deleteObject(storageRef);
-        } catch {
-          // Ignorer si le fichier n'existe plus dans Storage
-        }
+      // Supprimer du Storage via storagePath (chemin relatif fiable)
+      const storagePath = document.storagePath || `archives/${document.fileName}`;
+      try {
+        const storageRef = ref(storage, storagePath);
+        await deleteObject(storageRef);
+      } catch {
+        // Ignorer si le fichier n'existe plus dans Storage
       }
-
-      await loadDocuments();
-      setDocumentMessage(`Le document "${document.fileName}" a été supprimé.`);
     } catch (error) {
       console.error("Erreur suppression:", error);
+      // Rollback : recharger depuis Firestore
+      await loadDocuments();
       setDocumentMessage("Échec de la suppression du document.");
     }
   };
@@ -372,7 +393,7 @@ const Dashboard = () => {
     }
   };
 
-  // ─── FIREBASE : Créer un compte dans Firestore ────────────────────────────
+  // ─── FIREBASE : Créer un compte dans Auth + Firestore ───────────────────
   const handleCreateAccount = async () => {
     if (!canAddUsers) {
       setAccountMessage("Seul l'administrateur peut ajouter un nouveau compte.");
@@ -383,24 +404,35 @@ const Dashboard = () => {
       return;
     }
     try {
+      setAccountMessage("Création du compte en cours...");
+      // 1. Créer le compte Firebase Auth (instance secondaire pour ne pas déconnecter l'admin)
+      const secondaryAuth = getSecondaryAuth();
+      const credential = await createUserWithEmailAndPassword(
+        secondaryAuth,
+        accountForm.email.trim().toLowerCase(),
+        accountForm.password.trim()
+      );
+      // 2. Déconnecter l'instance secondaire
+      await secondaryAuth.signOut();
+      // 3. Enregistrer le profil dans Firestore
       await addDoc(collection(db, "users"), {
+        uid: credential.user.uid,
         name: accountForm.name.trim(),
-        email: accountForm.email.trim(),
+        email: accountForm.email.trim().toLowerCase(),
         role: accountForm.role,
+        department: "Département Technique",
         createdAt: serverTimestamp(),
       });
       setAccountMessage("Le nouveau compte a été créé avec succès.");
       resetAccountForm();
       await loadAccounts();
     } catch (error) {
-      try {
-        await createHostedAccount(accountForm);
-        setAccountMessage("Le nouveau compte a été créé avec succès.");
-        resetAccountForm();
-        await loadAccounts();
-      } catch (hostedError) {
-        setAccountMessage(hostedError.message || "Création du compte impossible.");
-      }
+      const msg = error.code === "auth/email-already-in-use"
+        ? "Cet email est déjà utilisé."
+        : error.code === "auth/weak-password"
+        ? "Le mot de passe doit contenir au moins 6 caractères."
+        : error.message || "Création du compte impossible.";
+      setAccountMessage(msg);
     }
   };
 
@@ -416,19 +448,12 @@ const Dashboard = () => {
       return;
     }
     try {
-      await deleteDoc(doc(db, "users", targetAccountId));
-      setAccountMessage("Le compte sélectionné a été supprimé avec succès.");
+      await deleteDoc(doc(db, "users", String(targetAccountId)));
+      setAccountMessage("Le compte a été supprimé avec succès.");
       resetAccountForm();
       await loadAccounts();
     } catch (error) {
-      try {
-        await deleteHostedAccount(targetAccountId);
-        setAccountMessage("Le compte sélectionné a été supprimé avec succès.");
-        resetAccountForm();
-        await loadAccounts();
-      } catch (hostedError) {
-        setAccountMessage(hostedError.message || "Suppression du compte impossible.");
-      }
+      setAccountMessage("Suppression impossible : " + (error.message || "vérifiez votre connexion."));
     }
   };
 
@@ -446,12 +471,16 @@ const Dashboard = () => {
       return;
     }
     try {
-      await updateHostedAccount(selectedAccountId, accountForm);
-      setAccountMessage("Le compte sélectionné a été modifié avec succès.");
+      await updateDoc(doc(db, "users", String(selectedAccountId)), {
+        name: accountForm.name.trim(),
+        email: accountForm.email.trim().toLowerCase(),
+        role: accountForm.role,
+      });
+      setAccountMessage("Le compte a été modifié avec succès.");
       resetAccountForm();
       await loadAccounts();
-    } catch (hostedError) {
-      setAccountMessage(hostedError.message || "Mise à jour du compte impossible.");
+    } catch (error) {
+      setAccountMessage("Modification impossible : " + (error.message || "vérifiez votre connexion."));
     }
   };
 
@@ -463,50 +492,55 @@ const Dashboard = () => {
   const getDocumentTimestamp = (document) =>
     document.uploadedAt || `${document.registeredAt}T08:00:00`;
 
-  const categoryOrder = categories.reduce((accumulator, category, index) => {
-    accumulator[category] = index;
-    return accumulator;
-  }, {});
+  const categoryOrder = useMemo(() =>
+    categories.reduce((accumulator, category, index) => {
+      accumulator[category] = index;
+      return accumulator;
+    }, {}),
+  []);
 
   const normalizedSearchTerm = debouncedSearchTerm.trim().toLowerCase();
   const hasActiveFilters = categoryFilter !== "Tous" || sortOption !== "date" || normalizedSearchTerm !== "";
 
-  const documents = documentsData
-    .filter((item) => {
-      const matchesCategory = categoryFilter === "Tous" || categoryFilter === item.category;
-      const matchesSearch =
-        normalizedSearchTerm === "" ||
-        (item.reference || "").toLowerCase().includes(normalizedSearchTerm) ||
-        (item.fileName || "").toLowerCase().includes(normalizedSearchTerm) ||
-        (item.title || "").toLowerCase().includes(normalizedSearchTerm) ||
-        (item.category || "").toLowerCase().includes(normalizedSearchTerm);
-      return matchesCategory && matchesSearch;
-    })
-    .sort((firstItem, secondItem) => {
-      if (categoryFilter === "Tous" && firstItem.category !== secondItem.category) {
-        return categoryOrder[firstItem.category] - categoryOrder[secondItem.category];
-      }
-      if (sortOption === "reference") {
-        return (firstItem.reference || "").localeCompare(secondItem.reference || "", "fr", { sensitivity: "base" });
-      }
-      if (sortOption === "nom") {
-        return (firstItem.fileName || "").localeCompare(secondItem.fileName || "", "fr", { sensitivity: "base" });
-      }
-      return new Date(getDocumentTimestamp(secondItem)) - new Date(getDocumentTimestamp(firstItem));
-    });
+  const documents = useMemo(() =>
+    documentsData
+      .filter((item) => {
+        const matchesCategory = categoryFilter === "Tous" || categoryFilter === item.category;
+        const matchesSearch =
+          normalizedSearchTerm === "" ||
+          (item.reference || "").toLowerCase().includes(normalizedSearchTerm) ||
+          (item.fileName || "").toLowerCase().includes(normalizedSearchTerm) ||
+          (item.title || "").toLowerCase().includes(normalizedSearchTerm) ||
+          (item.category || "").toLowerCase().includes(normalizedSearchTerm);
+        return matchesCategory && matchesSearch;
+      })
+      .sort((firstItem, secondItem) => {
+        if (categoryFilter === "Tous" && firstItem.category !== secondItem.category) {
+          return categoryOrder[firstItem.category] - categoryOrder[secondItem.category];
+        }
+        if (sortOption === "reference") {
+          return (firstItem.reference || "").localeCompare(secondItem.reference || "", "fr", { sensitivity: "base" });
+        }
+        if (sortOption === "nom") {
+          return (firstItem.fileName || "").localeCompare(secondItem.fileName || "", "fr", { sensitivity: "base" });
+        }
+        return new Date(getDocumentTimestamp(secondItem)) - new Date(getDocumentTimestamp(firstItem));
+      }),
+  [documentsData, categoryFilter, normalizedSearchTerm, sortOption, categoryOrder]);
 
-  const documentsByMonth = documents.reduce((groups, document) => {
-    const monthLabel = new Date(getDocumentTimestamp(document)).toLocaleDateString("fr-FR", {
-      month: "long", year: "numeric",
-    });
-    if (!groups[monthLabel]) groups[monthLabel] = [];
-    groups[monthLabel].push(document);
-    return groups;
-  }, {});
+  const groupedDocuments = useMemo(() => {
+    const byMonth = documents.reduce((groups, document) => {
+      const monthLabel = new Date(getDocumentTimestamp(document)).toLocaleDateString("fr-FR", {
+        month: "long", year: "numeric",
+      });
+      if (!groups[monthLabel]) groups[monthLabel] = [];
+      groups[monthLabel].push(document);
+      return groups;
+    }, {});
+    return Object.entries(byMonth);
+  }, [documents]);
 
-  const groupedDocuments = Object.entries(documentsByMonth);
-
-  const stats = [
+  const stats = useMemo(() => [
     { label: "Etude", count: documentsData.filter((doc) => doc.category === "Etude").length, color: "border-blue-500" },
     { label: "Gestion Stock ITC", count: documentsData.filter((doc) => doc.category === "Gestion Stock ITC").length, color: "border-indigo-500" },
     { label: "RH", count: documentsData.filter((doc) => doc.category === "RH").length, color: "border-emerald-500" },
@@ -515,7 +549,7 @@ const Dashboard = () => {
     { label: "Attachement ITC", count: documentsData.filter((doc) => doc.category === "Attachement ITC").length, color: "border-orange-500" },
     { label: "Corrdination-Moov ITC", count: documentsData.filter((doc) => doc.category === "Corrdination-Moov ITC").length, color: "border-indigo-500" },
     { label: "Coordination-Orange ITC", count: documentsData.filter((doc) => doc.category === "Coordination-Orange ITC").length, color: "border-emerald-500" },
-  ];
+  ], [documentsData]);
 
   const displayedStats =
     categoryFilter === "Tous"
@@ -532,41 +566,44 @@ const Dashboard = () => {
 
   const totalDocuments = documentsData.length;
   const safeTotalDocuments = Math.max(totalDocuments, 1);
-  const activeCategories = stats.filter((stat) => stat.count > 0);
-  const categoryAnalytics = activeCategories.map((stat, index) => ({
-    ...stat,
-    percent: Math.round((stat.count / safeTotalDocuments) * 100),
-    shortLabel: stat.label
-      .replace("Gestion Stock ITC", "Stock")
-      .replace("Supervision ITC", "Supervision")
-      .replace("Corrdination-Moov ITC", "Moov")
-      .replace("Coordination-Orange ITC", "Orange")
-      .replace("Attachement ITC", "Attachement"),
-    barClass: ["bg-blue-500", "bg-violet-500", "bg-emerald-500", "bg-amber-500"][index % 4],
-  }));
+  const activeCategories = useMemo(() => stats.filter((stat) => stat.count > 0), [stats]);
+  const categoryAnalytics = useMemo(() =>
+    activeCategories.map((stat, index) => ({
+      ...stat,
+      percent: Math.round((stat.count / safeTotalDocuments) * 100),
+      shortLabel: stat.label
+        .replace("Gestion Stock ITC", "Stock")
+        .replace("Supervision ITC", "Supervision")
+        .replace("Corrdination-Moov ITC", "Moov")
+        .replace("Coordination-Orange ITC", "Orange")
+        .replace("Attachement ITC", "Attachement"),
+      barClass: ["bg-blue-500", "bg-violet-500", "bg-emerald-500", "bg-amber-500"][index % 4],
+    })),
+  [activeCategories, safeTotalDocuments]);
 
   const maxCategoryCount = Math.max(...categoryAnalytics.map((item) => item.count), 1);
 
-  const latestArchiveDate = documentsData.reduce(
-    (latestDate, document) => {
-      const currentDate = new Date(getDocumentTimestamp(document));
-      return currentDate > latestDate ? currentDate : latestDate;
-    },
-    new Date(getDocumentTimestamp(documentsData[0] || { registeredAt: "2026-04-15" }))
-  );
-
-  const activityByDay = Array.from({ length: 7 }, (_, index) => {
-    const day = new Date(latestArchiveDate);
-    day.setDate(latestArchiveDate.getDate() - (6 - index));
-    const year = day.getFullYear();
-    const month = String(day.getMonth() + 1).padStart(2, "0");
-    const dayNumber = String(day.getDate()).padStart(2, "0");
-    const dateKey = `${year}-${month}-${dayNumber}`;
-    return {
-      label: day.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }),
-      count: documentsData.filter((document) => getDocumentTimestamp(document).slice(0, 10) === dateKey).length,
-    };
-  });
+  const activityByDay = useMemo(() => {
+    const latestArchiveDate = documentsData.reduce(
+      (latestDate, document) => {
+        const currentDate = new Date(getDocumentTimestamp(document));
+        return currentDate > latestDate ? currentDate : latestDate;
+      },
+      new Date(getDocumentTimestamp(documentsData[0] || { registeredAt: "2026-04-15" }))
+    );
+    return Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(latestArchiveDate);
+      day.setDate(latestArchiveDate.getDate() - (6 - index));
+      const year = day.getFullYear();
+      const month = String(day.getMonth() + 1).padStart(2, "0");
+      const dayNumber = String(day.getDate()).padStart(2, "0");
+      const dateKey = `${year}-${month}-${dayNumber}`;
+      return {
+        label: day.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }),
+        count: documentsData.filter((document) => getDocumentTimestamp(document).slice(0, 10) === dateKey).length,
+      };
+    });
+  }, [documentsData]);
 
   const maxActivityCount = Math.max(...activityByDay.map((day) => day.count), 1);
 
@@ -898,7 +935,7 @@ const Dashboard = () => {
                     <input type="file" onChange={(e) => { const selectedFile = e.target.files?.[0] || null; handleUploadFieldChange("file", selectedFile); handleUploadFieldChange("fileName", selectedFile?.name || ""); }} className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-200 bg-white shadow-sm" />
                     {uploadMessage && (<div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">{uploadMessage}</div>)}
                     <div className="flex gap-3">
-                      <button type="button" onClick={handleSaveDocument} className="bg-emerald-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-slate-900 transition-all">Enregistrer</button>
+                      <button type="button" onClick={handleSaveDocument} className="bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 transition-all">Enregistrer</button>
                       <button type="button" onClick={() => { setShowUploadForm(false); setUploadMessage(""); }} className="bg-white text-slate-700 px-4 py-3 rounded-lg font-bold border border-gray-200 hover:bg-gray-100 transition-all">Fermer</button>
                     </div>
                   </div>
@@ -928,6 +965,43 @@ const Dashboard = () => {
             {!canAddUsers && (
               <div className="mx-6 mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">L'ajout de nouveaux comptes est réservé à l'administrateur.</div>
             )}
+            {/* Table des comptes — toujours visible */}
+            <div className="mx-6 mb-6 overflow-x-auto rounded-2xl border border-gray-200 bg-white">
+              {isAccountsLoading ? (
+                <div className="px-4 py-6 text-center text-sm text-amber-700 font-medium">Chargement des comptes...</div>
+              ) : accounts.length === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-slate-500">{accountMessage || "Aucun compte enregistré."}</div>
+              ) : (
+                <table className="w-full text-left">
+                  <thead className="bg-gray-50 text-slate-500 text-xs uppercase font-bold">
+                    <tr>
+                      <th className="px-4 py-3">Nom</th>
+                      <th className="px-4 py-3">Email</th>
+                      <th className="px-4 py-3">Rôle</th>
+                      {canManageAccounts && <th className="px-4 py-3 text-right">Actions</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accounts.map((account) => (
+                      <tr key={account.id} className="border-t border-gray-100">
+                        <td className="px-4 py-3 font-semibold text-slate-700">{account.name}</td>
+                        <td className="px-4 py-3 text-slate-500">{account.email}</td>
+                        <td className="px-4 py-3"><span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-md text-xs font-bold">{account.role}</span></td>
+                        {canManageAccounts && (
+                          <td className="px-4 py-3">
+                            <div className="flex justify-end gap-2">
+                              <button type="button" onClick={() => { setShowAccountForm(true); handleAccountSelection(String(account.id)); }} className="bg-amber-500 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-amber-600 transition-all">Modifier</button>
+                              <button type="button" onClick={() => { setAccountMessage(""); handleDeleteAccount(account.id); }} className="bg-red-600 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-red-700 transition-all">Supprimer</button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            {/* Formulaire d'ajout/modification — visible sur demande */}
             {showAccountForm && canManageAccounts && (
               <div className="p-6 border-t border-gray-100 bg-gray-50">
                 <h3 className="text-lg font-bold text-slate-800 mb-4">Gestion des comptes utilisateurs</h3>
@@ -942,45 +1016,13 @@ const Dashboard = () => {
                     <option value="Consultation">Consultation</option>
                     <option value="Superviseur">Superviseur</option>
                   </select>
-                  {isAccountsLoading && (<div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">Chargement des comptes en cours...</div>)}
                   {accountMessage && (<div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">{accountMessage}</div>)}
                   <div className="flex flex-wrap gap-3">
                     {canAddUsers && (<button type="button" onClick={handleCreateAccount} className="bg-emerald-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-slate-900 transition-all">Créer le compte</button>)}
-                    <button type="button" onClick={handleUpdateAccount} className="bg-amber-500 text-white px-4 py-3 rounded-lg font-bold hover:bg-amber-600 transition-all">Modifier le compte</button>
-                    <button type="button" onClick={handleDeleteAccount} className="bg-red-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-red-700 transition-all">Supprimer le compte</button>
+                    {selectedAccountId && <button type="button" onClick={handleUpdateAccount} className="bg-amber-500 text-white px-4 py-3 rounded-lg font-bold hover:bg-amber-600 transition-all">Modifier le compte</button>}
+                    {selectedAccountId && <button type="button" onClick={handleDeleteAccount} className="bg-red-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-red-700 transition-all">Supprimer le compte</button>}
                     <button type="button" onClick={() => { resetAccountForm(); setAccountMessage(""); setShowAccountForm(false); }} className="bg-white text-slate-700 px-4 py-3 rounded-lg font-bold border border-gray-200 hover:bg-gray-100 transition-all">Fermer</button>
                   </div>
-                </div>
-                <div className="mt-6 overflow-x-auto rounded-2xl border border-gray-200 bg-white">
-                  <table className="w-full text-left">
-                    <thead className="bg-gray-50 text-slate-500 text-xs uppercase font-bold">
-                      <tr>
-                        <th className="px-4 py-3">Nom</th>
-                        <th className="px-4 py-3">Email</th>
-                        <th className="px-4 py-3">Rôle</th>
-                        <th className="px-4 py-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {accounts.map((account) => (
-                        <tr key={account.id} className="border-t border-gray-100">
-                          <td className="px-4 py-3 font-semibold text-slate-700">{account.name}</td>
-                          <td className="px-4 py-3 text-slate-500">{account.email}</td>
-                          <td className="px-4 py-3"><span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-md text-xs font-bold">{account.role}</span></td>
-                          <td className="px-4 py-3">
-                            {canManageAccounts ? (
-                              <div className="flex justify-end gap-2">
-                                <button type="button" onClick={() => { setShowAccountForm(true); handleAccountSelection(String(account.id)); }} className="bg-amber-500 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-amber-600 transition-all">Modifier</button>
-                                <button type="button" onClick={() => { setAccountMessage(""); handleDeleteAccount(account.id); }} className="bg-red-600 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-red-700 transition-all">Supprimer</button>
-                              </div>
-                            ) : (
-                              <span className="text-xs font-semibold text-slate-400">Consultation</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 </div>
               </div>
             )}
