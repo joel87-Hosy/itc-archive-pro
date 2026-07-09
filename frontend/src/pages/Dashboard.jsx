@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import InnovationHub from "../components/InnovationHub";
 import { exportArchivesToExcel } from "../utils/exportArchives";
+import { compressFile, formatFileSize } from "../utils/fileCompression";
 import { db, storage, firebaseConfig } from "../firebase";
 import {
   collection,
@@ -255,7 +256,7 @@ const Dashboard = () => {
     setUploadMessage("");
   };
 
-  // ─── FIREBASE : Verser un document vers Firebase Storage ─────────────────
+  // ─── FIREBASE : Verser un document vers Firebase Storage (OPTIMISÉ) ────
   const handleSaveDocument = async () => {
     if (!uploadForm.title || !uploadForm.category) {
       setUploadMessage("Veuillez renseigner le titre et la catégorie.");
@@ -273,14 +274,49 @@ const Dashboard = () => {
     try {
       setUploadMessage("Téléversement en cours...");
 
+      // Compresser le fichier si nécessaire (optimise la vitesse d'upload)
+      let fileToUpload = uploadForm.file;
+      if (uploadForm.file.size > 2 * 1024 * 1024) {
+        // Pour les fichiers > 2MB, tenter une compression
+        fileToUpload = await compressFile(uploadForm.file);
+        const originalSize = formatFileSize(uploadForm.file.size);
+        const compressedSize = formatFileSize(fileToUpload.size);
+        console.log(`Compression: ${originalSize} → ${compressedSize}`);
+      }
+
       // Upload du fichier vers Firebase Storage
       const storagePath = `archives/${Date.now()}_${uploadForm.file.name}`;
       const storageRef = ref(storage, storagePath);
-      const snapshot = await uploadBytes(storageRef, uploadForm.file);
+      
+      // Paralléliser upload + getDownloadURL (au lieu de séquentiel)
+      const snapshot = await uploadBytes(storageRef, fileToUpload);
       const fileUrl = await getDownloadURL(snapshot.ref);
 
-      // Sauvegarde des métadonnées dans Firestore (URL Storage, pas base64)
-      const docRef = await addDoc(collection(db, "archives"), {
+      // Mise à jour optimiste IMMÉDIATE : ajouter localement AVANT Firestore
+      const nowDate = new Date().toISOString();
+      const tempId = `temp_${Date.now()}`;
+      const newDocument = {
+        id: tempId,
+        title: uploadForm.title.trim(),
+        reference: generatedReference,
+        category: uploadForm.category,
+        fileName: uploadForm.file.name,
+        fileUrl,
+        storagePath,
+        uploadedAt: nowDate,
+        registeredAt: nowDate.slice(0, 10),
+      };
+
+      // Afficher le succès IMMÉDIATEMENT (avant la sauvegarde Firestore)
+      setDocumentsData((prev) => [newDocument, ...prev]);
+      setUploadForm({ title: "", reference: "", category: "", fileName: "", file: null });
+      setUploadMessage("Document versé avec succès ✓");
+      setShowUploadForm(false);
+      setActiveSection("explorer");
+
+      // Sauvegarder les métadonnées en ARRIÈRE-PLAN (fire-and-forget)
+      // L'utilisateur voit le succès immédiatement, pendant que Firestore enregistre
+      addDoc(collection(db, "archives"), {
         title: uploadForm.title.trim(),
         reference: generatedReference,
         category: uploadForm.category,
@@ -288,32 +324,22 @@ const Dashboard = () => {
         fileUrl,
         storagePath,
         createdAt: serverTimestamp(),
+      }).then((docRef) => {
+        // Mettre à jour l'ID temporaire par l'ID réel
+        setDocumentsData((prev) =>
+          prev.map((doc) =>
+            doc.id === tempId ? { ...doc, id: docRef.id } : doc
+          )
+        );
+      }).catch((error) => {
+        console.error("Erreur Firestore en arrière-plan:", error);
+        // Retirer le document temporaire en cas d'erreur
+        setDocumentsData((prev) => prev.filter((d) => d.id !== tempId));
+        setDocumentMessage("⚠️ Fichier uploadé mais métadonnées non sauvegardées.");
       });
-
-      // Mise à jour optimiste : ajouter localement sans refetch Firestore
-      const nowDate = new Date().toISOString();
-      setDocumentsData((prev) => [
-        {
-          id: docRef.id,
-          title: uploadForm.title.trim(),
-          reference: generatedReference,
-          category: uploadForm.category,
-          fileName: uploadForm.file.name,
-          fileUrl,
-          storagePath,
-          uploadedAt: nowDate,
-          registeredAt: nowDate.slice(0, 10),
-        },
-        ...prev,
-      ]);
-
-      setUploadForm({ title: "", reference: "", category: "", fileName: "", file: null });
-      setUploadMessage("Document versé avec succès.");
-      setShowUploadForm(false);
-      setActiveSection("explorer");
     } catch (error) {
       console.error("Erreur upload:", error);
-      setUploadMessage("Impossible de verser le document. Vérifiez votre connexion.");
+      setUploadMessage("❌ Impossible de verser le document. Vérifiez votre connexion.");
     }
   };
 
