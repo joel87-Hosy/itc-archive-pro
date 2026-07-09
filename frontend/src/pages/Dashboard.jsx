@@ -31,7 +31,7 @@ import {
   query,
   serverTimestamp,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { ref, deleteObject } from "firebase/storage";
 import { initializeApp, getApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 
@@ -284,13 +284,34 @@ const Dashboard = () => {
         console.log(`Compression: ${originalSize} → ${compressedSize}`);
       }
 
-      // Upload du fichier vers Firebase Storage
-      const storagePath = `archives/${Date.now()}_${uploadForm.file.name}`;
-      const storageRef = ref(storage, storagePath);
-      
-      // Paralléliser upload + getDownloadURL (au lieu de séquentiel)
-      const snapshot = await uploadBytes(storageRef, fileToUpload);
-      const fileUrl = await getDownloadURL(snapshot.ref);
+      // ─── UPLOAD VIA BACKEND (CONTOURNE CORS) ──────────────────────────
+      // Le backend fait l'upload à Firebase Storage, ce qui évite les problèmes CORS
+      const formData = new FormData();
+      formData.append("file", fileToUpload);
+      formData.append("title", uploadForm.title.trim());
+      formData.append("category", uploadForm.category);
+      formData.append("reference", generatedReference);
+
+      // Déterminer l'URL du backend
+      const apiBaseUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
+      const uploadResponse = await fetch(`${apiBaseUrl}/api/upload`, {
+        method: "POST",
+        body: formData,
+        // Pas de Content-Type, le navigateur le définit automatiquement avec boundary
+      });
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || `Upload failed with status ${uploadResponse.status}`);
+      }
+
+      const uploadData = await uploadResponse.json();
+      if (!uploadData.success) {
+        throw new Error(uploadData.error || "Upload failed");
+      }
+
+      const fileUrl = uploadData.fileUrl;
+      const storagePath = uploadData.storagePath;
 
       // Mise à jour optimiste IMMÉDIATE : ajouter localement AVANT Firestore
       const nowDate = new Date().toISOString();
@@ -343,20 +364,16 @@ const Dashboard = () => {
       // Analyser le type d'erreur pour un message plus clair
       let errorMessage = "❌ Impossible de verser le document. ";
       
-      if (error.code === "storage/unauthenticated") {
-        errorMessage += "Authentification requise. Reconnectez-vous.";
-      } else if (error.code === "storage/unauthorized") {
-        errorMessage += "Permissions insuffisantes.";
+      if (error.message?.includes("fetch")) {
+        errorMessage += "Impossible de joindre le serveur. Vérifiez la connexion réseau.";
       } else if (error.message?.includes("CORS")) {
-        errorMessage += "⚠️ CORS non configuré. Consultez FIREBASE_CORS_SETUP.md pour la solution.";
-      } else if (error.message?.includes("network") || error.message?.includes("ERR_FAILED")) {
-        errorMessage += "Problème réseau ou CORS. Vérifiez la connexion et la configuration CORS.";
-      } else if (error.code === "storage/invalid-argument") {
-        errorMessage += "Fichier invalide ou trop volumineux.";
-      } else if (error.code === "storage/server-file-wrong-size") {
-        errorMessage += "Fichier corrompu ou taille incorrecte.";
+        errorMessage += "Erreur de communication avec le serveur.";
+      } else if (error.message?.includes("unauthorized")) {
+        errorMessage += "Authentification requise. Reconnectez-vous.";
+      } else if (error.message?.includes("too large") || error.message?.includes("413")) {
+        errorMessage += "Fichier trop volumineux (max 100MB).";
       } else {
-        errorMessage += "Vérifiez votre connexion. (" + (error.code || error.message?.slice(0, 30)) + ")";
+        errorMessage += error.message || "Vérifiez votre connexion.";
       }
       
       setUploadMessage(errorMessage);

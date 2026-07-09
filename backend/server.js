@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const uploadRoute = require("./routes/upload");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -254,6 +255,9 @@ app.post("/api/innovation/natural-search", (req, res) => {
     data: interpretNaturalSearch(query),
   });
 });
+
+// ─── ROUTE D'UPLOAD (bypass CORS depuis GitHub Pages) ────────────────────
+app.use("/api", uploadRoute);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Route introuvable" });
