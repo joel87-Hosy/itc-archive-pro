@@ -338,8 +338,28 @@ const Dashboard = () => {
         setDocumentMessage("⚠️ Fichier uploadé mais métadonnées non sauvegardées.");
       });
     } catch (error) {
-      console.error("Erreur upload:", error);
-      setUploadMessage("❌ Impossible de verser le document. Vérifiez votre connexion.");
+      console.error("Erreur upload complète:", error);
+      
+      // Analyser le type d'erreur pour un message plus clair
+      let errorMessage = "❌ Impossible de verser le document. ";
+      
+      if (error.code === "storage/unauthenticated") {
+        errorMessage += "Authentification requise. Reconnectez-vous.";
+      } else if (error.code === "storage/unauthorized") {
+        errorMessage += "Permissions insuffisantes.";
+      } else if (error.message?.includes("CORS")) {
+        errorMessage += "⚠️ CORS non configuré. Consultez FIREBASE_CORS_SETUP.md pour la solution.";
+      } else if (error.message?.includes("network") || error.message?.includes("ERR_FAILED")) {
+        errorMessage += "Problème réseau ou CORS. Vérifiez la connexion et la configuration CORS.";
+      } else if (error.code === "storage/invalid-argument") {
+        errorMessage += "Fichier invalide ou trop volumineux.";
+      } else if (error.code === "storage/server-file-wrong-size") {
+        errorMessage += "Fichier corrompu ou taille incorrecte.";
+      } else {
+        errorMessage += "Vérifiez votre connexion. (" + (error.code || error.message?.slice(0, 30)) + ")";
+      }
+      
+      setUploadMessage(errorMessage);
     }
   };
 
