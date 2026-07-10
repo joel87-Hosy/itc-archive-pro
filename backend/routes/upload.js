@@ -11,6 +11,7 @@ const router = express.Router();
 
 let admin;
 let storage;
+const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || "archive-itc.appspot.com";
 
 try {
   admin = require("firebase-admin");
@@ -22,7 +23,7 @@ try {
 
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
-      storageBucket: "archive-itc.appspot.com",
+      storageBucket,
     });
   }
 

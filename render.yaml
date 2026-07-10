@@ -11,4 +11,6 @@ services:
         value: production
       - key: FRONTEND_ORIGIN
         value: https://joel87-hosy.github.io
+      - key: FIREBASE_STORAGE_BUCKET
+        value: archive-itc.appspot.com
     healthCheckPath: /
