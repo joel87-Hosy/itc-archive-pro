@@ -48,6 +48,32 @@ const getSecondaryAuth = () => {
   return _secondaryAuth;
 };
 
+const fetchWithTimeout = async (url, options = {}, timeoutMs = 130000) => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
+
+const readJsonResponse = async (response) => {
+  const text = await response.text();
+
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("Le serveur a retourne une reponse invalide.");
+  }
+};
+
 // --- COMPOSANT : VISUALISEUR DE DOCUMENTS ---
 const DocumentViewer = ({ fileUrl, fileName, onClose }) => {
   if (!fileUrl) return null;
@@ -133,6 +159,7 @@ const Dashboard = () => {
     fileName: "",
     file: null,
   });
+  const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const [accountForm, setAccountForm] = useState({
     name: "",
@@ -258,6 +285,8 @@ const Dashboard = () => {
 
   // ─── FIREBASE : Verser un document vers Firebase Storage (OPTIMISÉ) ────
   const handleSaveDocument = async () => {
+    if (isUploading) return;
+
     if (!uploadForm.title || !uploadForm.category) {
       setUploadMessage("Veuillez renseigner le titre et la catégorie.");
       return;
@@ -270,6 +299,8 @@ const Dashboard = () => {
     const generatedReference =
       uploadForm.reference?.trim() ||
       `ITC-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+
+    setIsUploading(true);
 
     try {
       setUploadMessage("Téléversement en cours...");
@@ -294,18 +325,18 @@ const Dashboard = () => {
 
       // Déterminer l'URL du backend
       const apiBaseUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
-      const uploadResponse = await fetch(`${apiBaseUrl}/api/upload`, {
+      const uploadResponse = await fetchWithTimeout(`${apiBaseUrl}/api/upload`, {
         method: "POST",
         body: formData,
         // Pas de Content-Type, le navigateur le définit automatiquement avec boundary
       });
 
+      const uploadData = await readJsonResponse(uploadResponse);
+
       if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json();
-        throw new Error(errorData.error || `Upload failed with status ${uploadResponse.status}`);
+        throw new Error(uploadData.error || `Upload failed with status ${uploadResponse.status}`);
       }
 
-      const uploadData = await uploadResponse.json();
       if (!uploadData.success) {
         throw new Error(uploadData.error || "Upload failed");
       }
@@ -364,7 +395,9 @@ const Dashboard = () => {
       // Analyser le type d'erreur pour un message plus clair
       let errorMessage = "❌ Impossible de verser le document. ";
       
-      if (error.message?.includes("fetch")) {
+      if (error.name === "AbortError") {
+        errorMessage += "Le serveur met trop de temps a repondre. Reessayez avec un fichier plus petit ou verifiez le backend.";
+      } else if (error.message?.includes("fetch")) {
         errorMessage += "Impossible de joindre le serveur. Vérifiez la connexion réseau.";
       } else if (error.message?.includes("CORS")) {
         errorMessage += "Erreur de communication avec le serveur.";
@@ -377,6 +410,8 @@ const Dashboard = () => {
       }
       
       setUploadMessage(errorMessage);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -998,7 +1033,7 @@ const Dashboard = () => {
                     <input type="file" onChange={(e) => { const selectedFile = e.target.files?.[0] || null; handleUploadFieldChange("file", selectedFile); handleUploadFieldChange("fileName", selectedFile?.name || ""); }} className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-200 bg-white shadow-sm" />
                     {uploadMessage && (<div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">{uploadMessage}</div>)}
                     <div className="flex gap-3">
-                      <button type="button" onClick={handleSaveDocument} className="bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 transition-all">Enregistrer</button>
+                      <button type="button" onClick={handleSaveDocument} disabled={isUploading} className="bg-blue-600 text-white px-4 py-3 rounded-lg font-bold hover:bg-blue-700 transition-all disabled:cursor-not-allowed disabled:opacity-60">{isUploading ? "Envoi en cours..." : "Enregistrer"}</button>
                       <button type="button" onClick={() => { setShowUploadForm(false); setUploadMessage(""); }} className="bg-white text-slate-700 px-4 py-3 rounded-lg font-bold border border-gray-200 hover:bg-gray-100 transition-all">Fermer</button>
                     </div>
                   </div>
