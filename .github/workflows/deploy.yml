@@ -31,6 +31,8 @@ jobs:
       - name: Build
         run: CI=false npm run build
         working-directory: frontend
+        env:
+          REACT_APP_API_URL: ${{ vars.REACT_APP_API_URL }}
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
