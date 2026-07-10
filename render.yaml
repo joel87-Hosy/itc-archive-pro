@@ -11,6 +11,10 @@ services:
         value: production
       - key: FRONTEND_ORIGIN
         value: https://joel87-hosy.github.io
-      - key: FIREBASE_STORAGE_BUCKET
-        value: archive-itc.appspot.com
+      - key: SUPABASE_BUCKET
+        value: archives
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
     healthCheckPath: /

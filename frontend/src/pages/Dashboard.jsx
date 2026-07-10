@@ -19,7 +19,7 @@ import { useNavigate } from "react-router-dom";
 import InnovationHub from "../components/InnovationHub";
 import { exportArchivesToExcel } from "../utils/exportArchives";
 import { compressFile, formatFileSize } from "../utils/fileCompression";
-import { db, storage, firebaseConfig } from "../firebase";
+import { db, firebaseConfig } from "../firebase";
 import {
   collection,
   getDocs,
@@ -31,7 +31,6 @@ import {
   query,
   serverTimestamp,
 } from "firebase/firestore";
-import { ref, deleteObject } from "firebase/storage";
 import { initializeApp, getApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 
@@ -432,13 +431,23 @@ const Dashboard = () => {
       // Supprimer de Firestore
       await deleteDoc(doc(db, "archives", document.id));
 
-      // Supprimer du Storage via storagePath (chemin relatif fiable)
+      // Supprimer du stockage fichier via le backend
       const storagePath = document.storagePath || `archives/${document.fileName}`;
       try {
-        const storageRef = ref(storage, storagePath);
-        await deleteObject(storageRef);
-      } catch {
-        // Ignorer si le fichier n'existe plus dans Storage
+        const apiBaseUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
+        const deleteResponse = await fetchWithTimeout(`${apiBaseUrl}/api/upload`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ storagePath }),
+        });
+        if (!deleteResponse.ok) {
+          const errorData = await readJsonResponse(deleteResponse);
+          throw new Error(errorData.error || "Suppression du fichier impossible");
+        }
+      } catch (storageError) {
+        console.warn("Fichier distant non supprime:", storageError);
       }
     } catch (error) {
       console.error("Erreur suppression:", error);
