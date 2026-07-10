@@ -1,26 +1,24 @@
 /**
- * Route d'upload proxy - Contourne les problèmes CORS en faisant l'upload côté serveur
- * Backend reçoit le fichier → Firebase Storage → Retourne URL
+ * Upload proxy route.
+ * The backend receives the file, sends it to Firebase Storage, and returns a download URL.
  */
 
 const express = require("express");
-const router = express.Router();
 const multer = require("multer");
+const { randomUUID } = require("crypto");
 
-// Importer les services Firebase
+const router = express.Router();
+
 let admin;
 let storage;
 
 try {
-  // Firebase Admin SDK - initialiser depuis le backend
   admin = require("firebase-admin");
-  
-  // Vérifier si déjà initialisé
+
   if (!admin.apps.length) {
-    // Charger les credentials depuis la variable d'env ou un fichier
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
+    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
       ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-      : require("./firebase-service-account.json"); // Chemin local pour développement
+      : require("./firebase-service-account.json");
 
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
@@ -30,58 +28,66 @@ try {
 
   storage = admin.storage();
 } catch (error) {
-  console.warn("⚠️ Firebase Admin SDK not configured. Upload endpoint will not work.");
-  console.warn("Set FIREBASE_SERVICE_ACCOUNT env var or create firebase-service-account.json");
+  console.warn("Firebase Admin SDK is not configured. Upload endpoint will not work.");
+  console.warn("Set FIREBASE_SERVICE_ACCOUNT env var or create firebase-service-account.json.");
 }
 
-// Configurare multer pour les uploads en mémoire
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB max
+    fileSize: 100 * 1024 * 1024,
   },
   fileFilter: (req, file, cb) => {
-    // Accepter la plupart des fichiers, refuser les exécutables
     const blockedExtensions = [".exe", ".bat", ".cmd", ".sh", ".py"];
     const ext = require("path").extname(file.originalname).toLowerCase();
-    
+
     if (blockedExtensions.includes(ext)) {
-      return cb(new Error("Type de fichier non autorisé"));
+      return cb(new Error("Type de fichier non autorise"));
     }
-    
+
     cb(null, true);
   },
 });
 
-/**
- * POST /api/upload
- * Upload un fichier vers Firebase Storage
- * 
- * Body (multipart/form-data):
- * - file: Binary (le fichier)
- * - title: string (titre du document)
- * - category: string (catégorie)
- * - reference: string (référence, optionnel)
- * 
- * Response:
- * {
- *   success: true,
- *   fileUrl: "https://firebasestorage.googleapis.com/...",
- *   fileName: "document.pdf",
- *   storagePath: "archives/1234567_document.pdf"
- * }
- */
-router.post("/upload", upload.single("file"), async (req, res) => {
+const runWithTimeout = (promise, timeoutMs, message) => {
+  let timeoutId;
+
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+};
+
+const uploadSingleFile = (req, res, next) => {
+  upload.single("file")(req, res, (error) => {
+    if (!error) {
+      return next();
+    }
+
+    const isSizeError = error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE";
+
+    return res.status(isSizeError ? 413 : 400).json({
+      success: false,
+      error: isSizeError
+        ? "Fichier trop volumineux (max 100MB)"
+        : error.message || "Fichier invalide",
+    });
+  });
+};
+
+const buildFirebaseDownloadUrl = (bucketName, storagePath, token) =>
+  `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`;
+
+router.post("/upload", uploadSingleFile, async (req, res) => {
   try {
-    // Vérifier Firebase est initialisé
     if (!storage) {
       return res.status(503).json({
         success: false,
-        error: "Firebase Storage non configuré sur le serveur",
+        error: "Firebase Storage non configure sur le serveur",
       });
     }
 
-    // Vérifier le fichier
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -89,7 +95,6 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       });
     }
 
-    // Vérifier les données
     const { title, category, reference } = req.body;
     if (!title || !category) {
       return res.status(400).json({
@@ -98,32 +103,33 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       });
     }
 
-    // Construire le chemin du fichier
     const timestamp = Date.now();
     const storagePath = `archives/${timestamp}_${req.file.originalname}`;
     const bucket = storage.bucket();
     const file = bucket.file(storagePath);
+    const downloadToken = randomUUID();
 
-    // Upload le fichier
-    await file.save(req.file.buffer, {
-      contentType: req.file.mimetype,
-      metadata: {
-        title,
-        category,
-        reference: reference || `ITC-${new Date().getFullYear()}-${timestamp.toString().slice(-4)}`,
-        uploadedAt: new Date().toISOString(),
-      },
-    });
+    await runWithTimeout(
+      file.save(req.file.buffer, {
+        contentType: req.file.mimetype,
+        metadata: {
+          metadata: {
+            title,
+            category,
+            reference: reference || `ITC-${new Date().getFullYear()}-${timestamp.toString().slice(-4)}`,
+            uploadedAt: new Date().toISOString(),
+            firebaseStorageDownloadTokens: downloadToken,
+          },
+        },
+        resumable: false,
+      }),
+      120000,
+      "Le televersement vers Firebase a pris trop de temps. Veuillez reessayer."
+    );
 
-    // Obtenir l'URL téléchargeable
-    const [downloadUrl] = await file.getSignedUrl({
-      version: "v4",
-      action: "read",
-      expires: Date.now() + 10 * 365 * 24 * 60 * 60 * 1000, // 10 ans
-    });
+    const downloadUrl = buildFirebaseDownloadUrl(bucket.name, storagePath, downloadToken);
 
-    // Retourner succès
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       fileUrl: downloadUrl,
       fileName: req.file.originalname,
@@ -131,7 +137,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur upload:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error.message || "Erreur lors de l'upload",
     });
